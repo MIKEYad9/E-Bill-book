@@ -1,0 +1,6 @@
+{
+  "name": "AI Retail Billing System for Clothing Shops",
+  "description": "AI-powered, offline-first billing software optimized for Indian clothing retailers. Features automated GST split ledger calculations, barcode scanning, thermal printing downloads, WhatsApp sharing, Apps Script Google Sheets automation, and Gemini-based bulk invoice image parsing OCR.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

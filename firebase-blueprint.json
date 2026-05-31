@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "shopSetup": {
+      "title": "Shop Setup",
+      "description": "Store profile configuration for the fashion retailer",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string", "description": "The name of the clothing store" },
+        "shopAddress": { "type": "string", "description": "Complete physical address of the store" },
+        "phone": { "type": "string", "description": "Store contact details" },
+        "whatsapp": { "type": "string", "description": "WhatsApp alerting phone number" },
+        "gstEnabled": { "type": "boolean", "description": "Whether GST calculations are active" },
+        "gstNumber": { "type": "string", "description": "Indian standard GSTIN registration number" },
+        "invoicePrefix": { "type": "string", "description": "Prefix used for generating bills e.g. RETAIL/2026/" },
+        "currency": { "type": "string", "description": "Display currency symbol" },
+        "logoUrl": { "type": "string", "description": "Base64 or external url image of store logo" },
+        "signatureUrl": { "type": "string", "description": "Owner signature sign image" }
+      },
+      "required": ["shopName", "phone"]
+    },
+    "invoice": {
+      "title": "Invoice",
+      "description": "Record of a completed sales bill",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string", "description": "Globally unique retail sequential number" },
+        "date": { "type": "string", "description": "Timestamp ISO-8601 when created" },
+        "customerName": { "type": "string", "description": "Billing name of customer" },
+        "customerPhone": { "type": "string", "description": "10-digit mobile number for WhatsApp alerts" },
+        "customerAddress": { "type": "string", "description": "Physical shipping or mailing layout" },
+        "subtotal": { "type": "number", "description": "Combined base cost of products" },
+        "totalDiscount": { "type": "number", "description": "Calculated total discount deducted" },
+        "gstEnabled": { "type": "boolean", "description": "Indicates if tax was added to final total" },
+        "totalGstAmount": { "type": "number", "description": "Accumulated IGST/CGST/SGST" },
+        "grandTotal": { "type": "number", "description": "Final payable rounding value" },
+        "paymentMethod": { "type": "string", "description": "Transaction mode selected" },
+        "syncedToSheets": { "type": "boolean", "description": "Denotes system sheet synchronization status" }
+      },
+      "required": ["invoiceNumber", "date", "customerName", "grandTotal"]
+    }
+  },
+  "firestore": {
+    "shopSetup/{userId}": {
+      "schema": "shopSetup",
+      "description": "Shop profile mapped dynamically to authenticated users"
+    },
+    "invoices/{invoiceId}": {
+      "schema": "invoice",
+      "description": "Secure list collection of issued fashion invoices"
+    }
+  }
+}
