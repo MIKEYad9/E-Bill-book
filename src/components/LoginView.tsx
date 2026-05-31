@@ -185,6 +185,9 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
 
     DB.saveSheetsConfig(config);
 
+    // Save active user email
+    localStorage.setItem('ai_billing_active_user_v2', email.trim().toLowerCase());
+
     // Persist WhatsApp protocols in sync with App configurations
     localStorage.setItem('ai_billing_whatsapp_type_v1', waGateway);
     localStorage.setItem('ai_billing_whatsapp_prefix_v1', waPrefix.trim());
@@ -202,6 +205,9 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
       scriptUrl: scriptUrl.trim(),
       connected: sheetsConnected
     };
+
+    // Save active user email
+    localStorage.setItem('ai_billing_active_user_v2', email.trim().toLowerCase());
 
     // Always make sure WhatsApp setups are written
     localStorage.setItem('ai_billing_whatsapp_type_v1', waGateway);

@@ -33,7 +33,10 @@ import {
   Share2,
   Save,
   Smartphone,
-  Lock
+  Lock,
+  AlertTriangle,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function App() {
@@ -49,6 +52,48 @@ export default function App() {
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [loginTime, setLoginTime] = useState('');
   const [sessionLogs, setSessionLogs] = useState<{ id: string; time: string; msg: string; type?: string }[]>([]);
+
+  // Active profile configuration states & danger zone trackers
+  const [activeUserEmail, setActiveUserEmail] = useState('vedantthakur918@gmail.com');
+  const [isDeletingProfile, setIsDeletingProfile] = useState(false);
+  const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
+
+  // Sync active user state whenever login changes
+  useEffect(() => {
+    const active = localStorage.getItem('ai_billing_active_user_v2') || 'vedantthakur918@gmail.com';
+    setActiveUserEmail(active);
+  }, [isLoggedIn]);
+
+  // Reset danger zone when drawer state changes
+  useEffect(() => {
+    if (!isProfileDrawerOpen) {
+      setIsDeletingProfile(false);
+      setDeleteConfirmationInput('');
+    }
+  }, [isProfileDrawerOpen]);
+
+  const getProfileDetails = () => {
+    const usersData = localStorage.getItem('ai_billing_registered_users_v2');
+    if (usersData) {
+      try {
+        const list = JSON.parse(usersData);
+        const match = list.find((u: any) => u.email.toLowerCase() === activeUserEmail.toLowerCase());
+        if (match) {
+          const namePart = match.email.split('@')[0];
+          const calculatedName = match.email.toLowerCase() === 'vedantthakur918@gmail.com' 
+            ? 'Vedant Thakur' 
+            : namePart.charAt(0).toUpperCase() + namePart.slice(1);
+          const initials = match.email.toLowerCase() === 'vedantthakur918@gmail.com'
+            ? 'VT' 
+            : namePart.substring(0, 2).toUpperCase();
+          return { name: calculatedName, email: match.email, initials };
+        }
+      } catch (e) {}
+    }
+    return { name: 'Vedant Thakur', email: 'vedantthakur918@gmail.com', initials: 'VT' };
+  };
+
+  const currentProfile = getProfileDetails();
 
   // Profile Drawer tab selector & active edit credentials states
   const [drawerTab, setDrawerTab] = useState<'audit' | 'config'>('audit');
@@ -147,6 +192,50 @@ export default function App() {
       setDrawerTab('audit'); // Switch back to audit view to see confirmation log
     } catch (e) {
       alert('Error updating credentials configuration.');
+    }
+  };
+
+  const handleDeleteActiveProfile = () => {
+    try {
+      // 1. Retrieve current registry list of profiles
+      const usersData = localStorage.getItem('ai_billing_registered_users_v2');
+      let currentUsers = [];
+      if (usersData) {
+        try {
+          currentUsers = JSON.parse(usersData);
+        } catch (e) {}
+      }
+
+      // 2. Remove matching user
+      const updatedUsers = currentUsers.filter(
+        (u: any) => u.email.trim().toLowerCase() !== activeUserEmail.trim().toLowerCase()
+      );
+
+      // Save registry list back
+      localStorage.setItem('ai_billing_registered_users_v2', JSON.stringify(updatedUsers));
+
+      // 3. Clear all active cache database entries (wipes all ledger data & integrations)
+      localStorage.removeItem('ai_billing_active_user_v2');
+      localStorage.removeItem('ai_billing_has_onboarded_v1');
+      localStorage.removeItem('ai_invoices_v1');
+      localStorage.removeItem('ai_shop_setup_v1');
+      localStorage.removeItem('ai_sheets_config_v1');
+      localStorage.removeItem('ai_billing_whatsapp_type_v1');
+      localStorage.removeItem('ai_billing_whatsapp_prefix_v1');
+      localStorage.removeItem('ai_billing_whatsapp_me_base_v1');
+      localStorage.removeItem('ai_billing_whatsapp_api_base_v1');
+
+      // 4. Force Reset view triggers safely
+      setIsProfileDrawerOpen(false);
+      setIsLoggedIn(false);
+      setHasOnboarded(false);
+
+      alert(`Your profile (${activeUserEmail}) and all its associated retail systems have been successfully wiped from local storage.`);
+      
+      // Force page reload back to fresh Secure Gate login
+      window.location.reload();
+    } catch (e) {
+      alert('Error while executing profile purge protocols.');
     }
   };
 
@@ -547,16 +636,16 @@ export default function App() {
                     <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-rose-500 font-black text-2xl text-white flex items-center justify-center shadow-lg border border-indigo-500/20">
-                          VT
+                          {currentProfile.initials}
                         </div>
                         <div className="space-y-0.5 min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <h4 className="text-md font-extrabold text-white">Vedant Thakur</h4>
+                            <h4 className="text-md font-extrabold text-white">{currentProfile.name}</h4>
                             <span className="bg-emerald-500/15 text-emerald-400 text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded border border-emerald-500/25 shrink-0">
                               ACTIVE
                             </span>
                           </div>
-                          <p className="text-xs text-slate-400 font-medium font-mono truncate">vedantthakur918@gmail.com</p>
+                          <p className="text-xs text-slate-400 font-medium font-mono truncate">{currentProfile.email}</p>
                           <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Role: Master Store Administrator</p>
                         </div>
                       </div>
@@ -627,7 +716,8 @@ export default function App() {
                     </div>
                   </>
                 ) : (
-                  <form onSubmit={(e) => { e.preventDefault(); handleSaveAllDrawerCredentials(); }} className="space-y-4">
+                  <>
+                    <form onSubmit={(e) => { e.preventDefault(); handleSaveAllDrawerCredentials(); }} className="space-y-4">
                     
                     {/* BOUTIQUE BLOCK */}
                     <div className="bg-slate-950/30 p-4 rounded-2xl border border-slate-800/80 space-y-3">
@@ -845,7 +935,78 @@ export default function App() {
                     </button>
 
                   </form>
-                )}
+
+                  {/* DANGER ZONE - Permanent Profile & Data Destruction Section */}
+                  <div className="bg-rose-950/20 border border-rose-900/60 rounded-2xl p-4 mt-5 space-y-3">
+                    <div className="flex items-center gap-2 border-b border-rose-900/40 pb-2">
+                      <ShieldAlert className="w-4 h-4 text-rose-500 animate-pulse bg-rose-900/10 p-0.5 rounded" />
+                      <h4 className="text-xs font-black tracking-widest text-rose-450 uppercase">🚨 DANGER ZONE</h4>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] font-black uppercase text-rose-400 block tracking-wider font-mono">
+                        ⚠️ EMERGENCY ACCOUNT PURGE PROTOCOL
+                      </span>
+                      <p className="text-[10px] text-rose-200/80 leading-relaxed font-sans font-medium">
+                        <strong>Note:</strong> Wiping this boutique profile is irreversible. All cached ledger invoices, physical store parameter assets, dynamic WhatsApp integration gateways, and active Google Sheets API synchronization structures will be completely destroyed. You are solely and completely responsible for this action and any ensuing connectivity disruptions.
+                      </p>
+                    </div>
+
+                    {!isDeletingProfile ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsDeletingProfile(true)}
+                        className="w-full bg-rose-900/30 hover:bg-rose-900/60 text-rose-200 hover:text-white border border-rose-800/80 text-[10px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 text-center mt-3"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Profile & Wipe Systems Data</span>
+                      </button>
+                    ) : (
+                      <div className="bg-rose-950/60 border border-rose-900 p-3 rounded-xl space-y-3.5 animate-slideDown">
+                        <p className="text-[10px] font-bold text-rose-300 leading-normal">
+                          ⚠️ Enter your registered email <code className="bg-rose-950 border border-rose-900 px-1 rounded font-mono text-white text-[9px]">{activeUserEmail}</code> below to confirm permanent deletion:
+                        </p>
+
+                        <div className="space-y-1">
+                          <input
+                            type="text"
+                            value={deleteConfirmationInput}
+                            onChange={(e) => setDeleteConfirmationInput(e.target.value)}
+                            placeholder="Type your email to confirm delete"
+                            className="w-full bg-slate-950 border-2 border-rose-900 rounded-lg p-2 text-xs font-semibold text-white focus:outline-none focus:border-rose-500 font-mono"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsDeletingProfile(false);
+                              setDeleteConfirmationInput('');
+                            }}
+                            className="bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold py-1.5 rounded-lg border border-slate-800 transition-all cursor-pointer text-center"
+                          >
+                            ❌ Cancel Action
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeleteActiveProfile}
+                            disabled={deleteConfirmationInput.trim().toLowerCase() !== activeUserEmail.trim().toLowerCase()}
+                            className={`font-black py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 leading-none text-center ${
+                              deleteConfirmationInput.trim().toLowerCase() === activeUserEmail.trim().toLowerCase()
+                                ? 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer shadow active:scale-95'
+                                : 'bg-rose-950/40 text-rose-800/60 border border-rose-900/40 cursor-not-allowed'
+                            }`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Wipe Account
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               </div>
 
