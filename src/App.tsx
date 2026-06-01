@@ -38,7 +38,9 @@ import {
   Lock,
   AlertTriangle,
   Trash2,
-  ShieldAlert
+  ShieldAlert,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function App() {
@@ -59,6 +61,15 @@ export default function App() {
   const [activeUserEmail, setActiveUserEmail] = useState('vedantthakur918@gmail.com');
   const [isDeletingProfile, setIsDeletingProfile] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
+
+  // Password Modification States
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [passwordChangeStatus, setPasswordChangeStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   // Thermal Invoicing states
   const [thermalInvoice, setThermalInvoice] = useState<Invoice | null>(null);
@@ -91,6 +102,13 @@ export default function App() {
     if (!isProfileDrawerOpen) {
       setIsDeletingProfile(false);
       setDeleteConfirmationInput('');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setShowOldPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmNewPassword(false);
+      setPasswordChangeStatus(null);
     }
   }, [isProfileDrawerOpen]);
 
@@ -214,6 +232,109 @@ export default function App() {
       setDrawerTab('audit'); // Switch back to audit view to see confirmation log
     } catch (e) {
       alert('Error updating credentials configuration.');
+    }
+  };
+
+  const handleUpdatePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordChangeStatus(null);
+
+    if (!oldPassword || !newPassword || !confirmNewPassword) {
+      setPasswordChangeStatus({
+        success: false,
+        message: 'All security password fields are required.'
+      });
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordChangeStatus({
+        success: false,
+        message: 'New password and confirm password fields do not match.'
+      });
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      setPasswordChangeStatus({
+        success: false,
+        message: 'New password must be at least 4 characters long.'
+      });
+      return;
+    }
+
+    try {
+      const usersData = SecureStorage.getItem('ai_billing_registered_users_v2');
+      let usersList = [];
+      if (usersData) {
+        try {
+          usersList = JSON.parse(usersData);
+        } catch (e) {}
+      } else {
+        // Fallback default user if not registry
+        usersList = [{
+          email: 'vedantthakur918@gmail.com',
+          password: 'admin123',
+          shopName: 'Balaji Fashion Saree Kendra',
+          shopAddress: 'Sector-5, Near Hanuman Mandir, Main Market, Jaipur, Rajasthan - 302001'
+        }];
+      }
+
+      // Find active user
+      const userIdx = usersList.findIndex((u: any) => u.email.trim().toLowerCase() === activeUserEmail.trim().toLowerCase());
+      if (userIdx === -1) {
+        setPasswordChangeStatus({
+          success: false,
+          message: `Active account registration profile was not found in local database.`
+        });
+        return;
+      }
+
+      const activeUser = usersList[userIdx];
+      if (activeUser.password !== oldPassword) {
+        setPasswordChangeStatus({
+          success: false,
+          message: 'Incorrect old password. Please enter correct current password.'
+        });
+        return;
+      }
+
+      // Update password
+      activeUser.password = newPassword;
+      usersList[userIdx] = activeUser;
+
+      // Persist changes
+      SecureStorage.setItem('ai_billing_registered_users_v2', JSON.stringify(usersList));
+      
+      // Update any last login auto-fill state if it was stored
+      SecureStorage.setItem('ai_billing_last_signup_password', newPassword);
+
+      setPasswordChangeStatus({
+        success: true,
+        message: 'Your account password has been updated and synchronized in the local ledger registry successfully!'
+      });
+
+      // Clear fields
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+
+      // Add audit log stream event
+      const logTime = new Date().toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      setSessionLogs((prev) => [
+        {
+          id: Math.random().toString(36).substring(2, 9),
+          time: logTime,
+          msg: `🔐 [Control Panel] Password successfully updated for account "${activeUserEmail}". Profile credentials secured.`
+        },
+        ...prev
+      ]);
+      
+    } catch (err: any) {
+      setPasswordChangeStatus({
+        success: false,
+        message: `An error occurred: ${err.message}`
+      });
     }
   };
 
@@ -958,6 +1079,120 @@ export default function App() {
                     </button>
 
                   </form>
+
+                  {/* PASSWORD CHANGE BLOCK */}
+                  <div className="bg-slate-950/30 p-4 rounded-2xl border border-slate-800/80 space-y-3 mt-5">
+                    <div className="flex items-center gap-1.5 border-b border-slate-800 pb-1.5 font-sans">
+                      <Lock className="w-4 h-4 text-purple-400" />
+                      <h4 className="text-xs font-black tracking-wider text-slate-200 uppercase">4. Change Security Password</h4>
+                    </div>
+
+                    <form onSubmit={handleUpdatePassword} className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide block font-sans">Old Password</label>
+                        <div className="relative">
+                          <input
+                            type={showOldPassword ? "text" : "password"}
+                            required
+                            value={oldPassword}
+                            onChange={(e) => setOldPassword(e.target.value)}
+                            placeholder="Enter current password"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-2 pr-9 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowOldPassword(!showOldPassword)}
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                          >
+                            {showOldPassword ? (
+                              <EyeOff className="w-3.5 h-3.5" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide block font-sans">New Password</label>
+                          <div className="relative">
+                            <input
+                              type={showNewPassword ? "text" : "password"}
+                              required
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              placeholder="New password"
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-2 pr-9 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                            >
+                              {showNewPassword ? (
+                                <EyeOff className="w-3.5 h-3.5" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide block font-sans">Confirm Password</label>
+                          <div className="relative">
+                            <input
+                              type={showConfirmNewPassword ? "text" : "password"}
+                              required
+                              value={confirmNewPassword}
+                              onChange={(e) => setConfirmNewPassword(e.target.value)}
+                              placeholder="Confirm password"
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-2 pr-9 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                            >
+                              {showConfirmNewPassword ? (
+                                <EyeOff className="w-3.5 h-3.5" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {passwordChangeStatus && (
+                        <div className={`p-2.5 rounded-xl border text-[10px] leading-normal font-semibold flex items-start gap-1.5 animate-fade-in ${
+                          passwordChangeStatus.success 
+                            ? 'bg-emerald-950/30 border-emerald-800/60 text-emerald-300' 
+                            : 'bg-rose-950/30 border-rose-800/60 text-rose-350'
+                        }`}>
+                          {passwordChangeStatus.success ? (
+                            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          )}
+                          <div className="space-y-0.5">
+                            <p className="font-extrabold uppercase text-[9px] tracking-wider">
+                              {passwordChangeStatus.success ? '✓ Change Confirmed' : '⚠ Change Error'}
+                            </p>
+                            <p className="font-normal text-slate-300">{passwordChangeStatus.message}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        className="w-full bg-slate-850 hover:bg-slate-800 text-white font-extrabold text-[10px] py-2 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer border border-slate-750 hover:border-slate-700 shadow-sm transition-transform active:scale-95 text-center"
+                      >
+                        <Lock className="w-3.5 h-3.5 text-purple-400" />
+                        <span>CONFIRM & REGISTER NEW PASSWORD</span>
+                      </button>
+                    </form>
+                  </div>
 
                   {/* DANGER ZONE - Permanent Profile & Data Destruction Section */}
                   <div className="bg-rose-950/20 border border-rose-900/60 rounded-2xl p-4 mt-5 space-y-3">

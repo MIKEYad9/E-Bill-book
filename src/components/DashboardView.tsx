@@ -51,6 +51,11 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
   const [aiResponse, setAiResponse] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'shares'>('overview');
+  const [isChartReady, setIsChartReady] = useState(false);
+
+  useEffect(() => {
+    setIsChartReady(true);
+  }, []);
 
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
 
@@ -391,24 +396,26 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
           </div>
 
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(val) => `₹${val}`} tickLine={false} axisLine={false} width={45} />
-                <Tooltip
-                  formatter={(value: any) => [`₹${value.toLocaleString()}`, 'Day Sales']}
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                />
-                <Area type="monotone" dataKey="sales" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#salesGrad)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isChartReady && (
+              <ResponsiveContainer width="99%" height="100%" minWidth={0} minHeight={0}>
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(val) => `₹${val}`} tickLine={false} axisLine={false} width={45} />
+                  <Tooltip
+                    formatter={(value: any) => [`₹${value.toLocaleString()}`, 'Day Sales']}
+                    contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                  />
+                  <Area type="monotone" dataKey="sales" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#salesGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
