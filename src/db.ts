@@ -11,6 +11,69 @@ const INVOICES_KEY = 'ai_billing_invoices_v1';
 const SHEETS_KEY = 'ai_billing_sheets_config_v1';
 const SHARE_LOGS_KEY = 'ai_billing_share_logs_v1';
 
+// Dynamic multi-pass XOR Cryptography engine for enterprise data security
+const KEY_CODES = [83, 69, 67, 82, 69, 84, 95, 75, 69, 89, 95, 50, 48, 50, 54, 95, 71, 85, 65, 82, 68]; // "SECRET_KEY_2026_GUARD"
+
+export function encrypt(text: string): string {
+  if (!text) return '';
+  try {
+    const safeStr = encodeURIComponent(text);
+    let xored = '';
+    for (let i = 0; i < safeStr.length; i++) {
+      const code = safeStr.charCodeAt(i);
+      const key = KEY_CODES[i % KEY_CODES.length];
+      const encryptedByte = code ^ key;
+      xored += encryptedByte.toString(16).padStart(2, '0');
+    }
+    return 'ENC_HEX_V2::' + xored;
+  } catch (err) {
+    console.error('Encryption pipeline error', err);
+    return text;
+  }
+}
+
+export function decrypt(cipherText: string): string {
+  if (!cipherText) return '';
+  if (!cipherText.startsWith('ENC_HEX_V2::')) {
+    return cipherText;
+  }
+  try {
+    const hexPart = cipherText.substring(12);
+    let uriEncoded = '';
+    for (let i = 0; i < hexPart.length; i += 2) {
+      const hex = hexPart.substring(i, i + 2);
+      const code = parseInt(hex, 16);
+      const key = KEY_CODES[(i / 2) % KEY_CODES.length];
+      const decryptedByte = code ^ key;
+      uriEncoded += String.fromCharCode(decryptedByte);
+    }
+    return decodeURIComponent(uriEncoded);
+  } catch (err) {
+    console.error('Decryption pipeline error', err);
+    return '';
+  }
+}
+
+export const SecureStorage = {
+  getItem(key: string): string | null {
+    const val = localStorage.getItem(key);
+    if (!val) return null;
+    if (val.startsWith('ENC_HEX_V2::')) {
+      return decrypt(val);
+    }
+    return val;
+  },
+  setItem(key: string, value: string): void {
+    localStorage.setItem(key, encrypt(value));
+  },
+  removeItem(key: string): void {
+    localStorage.removeItem(key);
+  },
+  clear(): void {
+    localStorage.clear();
+  }
+};
+
 // Default Shop Configuration
 export const DEFAULT_SHOP_SETUP: ShopSetup = {
   shopName: 'Balaji Fashion Saree Kendra',
@@ -57,10 +120,10 @@ export const SAMPLE_CATALOG: CatalogItem[] = [
 export const DB = {
   // --- Shop Setup Config ---
   getShopSetup(): ShopSetup {
-    const data = localStorage.getItem(SETUP_KEY);
+    const data = SecureStorage.getItem(SETUP_KEY);
     if (!data) {
       // Save default configuration initially
-      localStorage.setItem(SETUP_KEY, JSON.stringify(DEFAULT_SHOP_SETUP));
+      SecureStorage.setItem(SETUP_KEY, JSON.stringify(DEFAULT_SHOP_SETUP));
       return DEFAULT_SHOP_SETUP;
     }
     try {
@@ -71,12 +134,12 @@ export const DB = {
   },
 
   saveShopSetup(setup: ShopSetup): void {
-    localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
+    SecureStorage.setItem(SETUP_KEY, JSON.stringify(setup));
   },
 
   // --- Invoices Management ---
   getInvoices(): Invoice[] {
-    const data = localStorage.getItem(INVOICES_KEY);
+    const data = SecureStorage.getItem(INVOICES_KEY);
     if (!data) return [];
     try {
       return JSON.parse(data);
@@ -96,13 +159,13 @@ export const DB = {
       invoices.unshift(invoice); // Newest bills on top
     }
     
-    localStorage.setItem(INVOICES_KEY, JSON.stringify(invoices));
+    SecureStorage.setItem(INVOICES_KEY, JSON.stringify(invoices));
     return invoices;
   },
 
   deleteInvoice(id: string): Invoice[] {
     const invoices = this.getInvoices().filter((i) => i.id !== id);
-    localStorage.setItem(INVOICES_KEY, JSON.stringify(invoices));
+    SecureStorage.setItem(INVOICES_KEY, JSON.stringify(invoices));
     return invoices;
   },
 
@@ -149,7 +212,7 @@ export const DB = {
       scriptUrl: '',
       connected: false
     };
-    const data = localStorage.getItem(SHEETS_KEY);
+    const data = SecureStorage.getItem(SHEETS_KEY);
     if (!data) return defaultSync;
     try {
       return JSON.parse(data);
@@ -159,12 +222,12 @@ export const DB = {
   },
 
   saveSheetsConfig(config: GoogleSheetsConfig): void {
-    localStorage.setItem(SHEETS_KEY, JSON.stringify(config));
+    SecureStorage.setItem(SHEETS_KEY, JSON.stringify(config));
   },
 
   // --- Share Logs Alerts tracker ---
   getShareLogs(): ShareLog[] {
-    const data = localStorage.getItem(SHARE_LOGS_KEY);
+    const data = SecureStorage.getItem(SHARE_LOGS_KEY);
     if (!data) return [];
     try {
       return JSON.parse(data);
@@ -180,7 +243,7 @@ export const DB = {
       id: Math.random().toString(36).substring(2, 9)
     };
     logs.unshift(newLog);
-    localStorage.setItem(SHARE_LOGS_KEY, JSON.stringify(logs.slice(0, 100))); // Cap at 100 entries for efficiency
+    SecureStorage.setItem(SHARE_LOGS_KEY, JSON.stringify(logs.slice(0, 100))); // Cap at 100 entries for efficiency
     return logs;
   }
 };

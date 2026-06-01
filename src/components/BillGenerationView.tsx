@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Invoice, InvoiceItem, ShopSetup } from '../types';
 import { calculateInvoiceTotals, buildWhatsAppLink, buildTextReceipt } from '../utils';
 import { exportInvoicePDF } from '../pdfGenerator';
-import { DB, SAMPLE_CATALOG, CatalogItem } from '../db';
+import { DB, SAMPLE_CATALOG, CatalogItem, SecureStorage } from '../db';
 import {
   User,
   Phone,
@@ -107,7 +107,7 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
   const [shareCopied, setShareCopied] = useState(false);
   const [editedShareText, setEditedShareText] = useState('');
   const [whatsappGateway, setWhatsappGateway] = useState<'deeplink' | 'api'>(() => {
-    return (localStorage.getItem('ai_billing_whatsapp_type_v1') as 'deeplink' | 'api') || 'deeplink';
+    return (SecureStorage.getItem('ai_billing_whatsapp_type_v1') as 'deeplink' | 'api') || 'deeplink';
   });
 
   // 8. Row Delete Two-Step Confirmation State
@@ -525,9 +525,9 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
 
   // Fetch customized WhatsApp redirection settings
   const getWhatsAppPrefs = () => {
-    const prefix = localStorage.getItem('ai_billing_whatsapp_prefix_v1') || '91';
-    const meBase = localStorage.getItem('ai_billing_whatsapp_me_base_v1') || 'https://wa.me';
-    const apiBase = localStorage.getItem('ai_billing_whatsapp_api_base_v1') || 'https://api.whatsapp.com/send';
+    const prefix = SecureStorage.getItem('ai_billing_whatsapp_prefix_v1') || '91';
+    const meBase = SecureStorage.getItem('ai_billing_whatsapp_me_base_v1') || 'https://wa.me';
+    const apiBase = SecureStorage.getItem('ai_billing_whatsapp_api_base_v1') || 'https://api.whatsapp.com/send';
     return { prefix, meBase, apiBase };
   };
 
@@ -836,14 +836,15 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
 
             <div className="space-y-0.5 md:col-span-1">
               <label className="text-[9px] font-bold text-slate-400 block uppercase">Qty</label>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center justify-center gap-1">
                 <button
                   type="button"
                   onClick={() => setManualQty(Math.max(1, (manualQty || 1) - 1))}
-                  className="w-7 h-[26px] flex items-center justify-center bg-slate-50 hover:bg-slate-100 active:scale-90 text-slate-600 rounded-lg border border-slate-200 transition-all"
+                  className="w-10 h-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 active:scale-90 text-slate-700 rounded-xl border border-slate-200 transition-all font-black text-sm shrink-0"
                   title="Decrease Quantity"
+                  aria-label="Decrease quantity manually"
                 >
-                  <Minus className="w-3 h-3" />
+                  <Minus className="w-3.5 h-3.5" />
                 </button>
                 <input
                   type="number"
@@ -851,15 +852,16 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
                   value={manualQty || ''}
                   onChange={(e) => setManualQty(Math.max(1, Number(e.target.value)))}
                   onFocus={(e) => e.target.select()}
-                  className="w-full text-center py-1 text-xs border border-slate-200 rounded-lg text-slate-800 font-bold"
+                  className="w-full text-center py-2 h-10 text-xs border border-slate-200 rounded-xl text-slate-850 font-black"
                 />
                 <button
                   type="button"
                   onClick={() => setManualQty((manualQty || 1) + 1)}
-                  className="w-7 h-[26px] flex items-center justify-center bg-slate-50 hover:bg-slate-100 active:scale-90 text-slate-600 rounded-lg border border-slate-200 transition-all"
+                  className="w-10 h-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 active:scale-90 text-slate-700 rounded-xl border border-slate-200 transition-all font-black text-sm shrink-0"
                   title="Increase Quantity"
+                  aria-label="Increase quantity manually"
                 >
-                  <Plus className="w-3 h-3" />
+                  <Plus className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -972,22 +974,51 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
               </div>
               <div className="divide-y divide-slate-100/80">
                 {totals.items.map((item) => (
-                  <div key={item.id} className="py-2 flex items-center justify-between text-[11px] font-semibold text-slate-700">
-                    <div className="space-y-0.5">
+                  <div key={item.id} className="py-2.5 flex items-center justify-between text-[11px] font-semibold text-slate-700 hover:bg-slate-50/50 rounded-xl px-1.5 transition-colors">
+                    <div className="space-y-1 my-0.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-slate-850 font-extrabold">{item.name}</span>
-                        <span className="bg-slate-200/60 text-slate-700 px-1 py-0.2 rounded text-[8px] font-mono font-bold leading-none">{item.size}</span>
+                        <span className="text-slate-900 font-extrabold">{item.name}</span>
+                        <span className="bg-slate-200/70 text-slate-800 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold leading-none">{item.size}</span>
                       </div>
-                      <div className="text-[10px] text-slate-400 font-medium">
-                        {item.quantity} × Rs.{item.rate}
-                        {item.discountPercent > 0 && <span className="text-emerald-600 font-bold ml-1">-{item.discountPercent}%</span>}
-                        {shopSetup.gstEnabled && item.gstPercent > 0 && <span className="text-slate-500 font-bold ml-1">GST {item.gstPercent}%</span>}
+                      {/* Interactive responsive Touch-Friendly Qty changer in POS Row */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center justify-center gap-1 bg-slate-150/70 rounded-lg p-0.5 border border-slate-200/50">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateItemField(item.id, 'quantity', Math.max(1, item.quantity - 1))}
+                            className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center bg-white hover:bg-slate-50 active:scale-90 text-slate-800 rounded-md border border-slate-200/60 transition-all font-black text-xs cursor-pointer shadow-3xs"
+                            title="Decrease Quantity"
+                            aria-label={`Decrease quantity of ${item.name}`}
+                          >
+                            <Minus className="w-2.5 h-2.5" />
+                          </button>
+                          <span className="w-7 text-center text-[10.5px] font-black font-mono text-slate-850">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateItemField(item.id, 'quantity', item.quantity + 1)}
+                            className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center bg-white hover:bg-slate-50 active:scale-90 text-slate-800 rounded-md border border-slate-200/60 transition-all font-black text-xs cursor-pointer shadow-3xs"
+                            title="Increase Quantity"
+                            aria-label={`Increase quantity of ${item.name}`}
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-semibold font-mono">
+                          × Rs.{item.rate}
+                        </span>
+                        {item.discountPercent > 0 && <span className="text-emerald-600 font-black text-[9px] ml-0.5">-{item.discountPercent}%</span>}
+                        {shopSetup.gstEnabled && item.gstPercent > 0 && <span className="text-slate-500 font-bold text-[9px] ml-0.5">GST {item.gstPercent}%</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Individual Discount column */}
-                      <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 shadow-xs" title="Item level discount percent">
-                        <span className="text-[8px] text-slate-400 font-extrabold uppercase">Disc:</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Individual Discount column with touch-enhanced interactive target area */}
+                      <div 
+                        className="flex items-center gap-1 bg-white border border-slate-200/95 rounded-xl px-3 py-1.5 h-10 shadow-3xs pos-touch-input-container cursor-text"
+                        title="Item level discount percent (tap to edit)"
+                      >
+                        <span className="text-[8.5px] text-slate-450 font-black uppercase tracking-wider">Disc:</span>
                         <input
                           type="number"
                           min={0}
@@ -998,9 +1029,10 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
                             const val = Math.min(100, Math.max(0, Number(e.target.value)));
                             handleUpdateItemField(item.id, 'discountPercent', val);
                           }}
-                          className="w-7 text-center text-[10px] font-black text-slate-800 bg-transparent border-none focus:outline-none focus:ring-0 p-0"
+                          className="w-8 sm:w-9 text-center text-xs sm:text-sm font-black text-slate-900 bg-transparent border-none focus:outline-none focus:ring-0 p-0 pos-compact-number font-mono"
+                          aria-label={`Discount percent for ${item.name}`}
                         />
-                        <span className="text-[9px] text-slate-400 font-bold">%</span>
+                        <span className="text-[9.5px] text-slate-500 font-extrabold">%</span>
                       </div>
 
                       <div className="text-right min-w-[55px]">
@@ -1014,7 +1046,7 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
                       <button
                         type="button"
                         onClick={() => handleRemoveDraftItem(item.id)}
-                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded transition-colors"
+                        className="p-2 bg-slate-50 hover:bg-rose-50 border border-slate-200/50 hover:border-rose-200/40 text-slate-400 hover:text-rose-600 rounded-xl transition-all cursor-pointer min-w-[38px] min-h-[38px] flex items-center justify-center active:scale-95"
                         title="Remove"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1391,7 +1423,7 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
                         type="button"
                         onClick={() => {
                           setWhatsappGateway('deeplink');
-                          localStorage.setItem('ai_billing_whatsapp_type_v1', 'deeplink');
+                          SecureStorage.setItem('ai_billing_whatsapp_type_v1', 'deeplink');
                           window.dispatchEvent(new CustomEvent('add-session-log', { detail: '📱 Changed WhatsApp gateway to Mobile App Deep-Link (wa.me)' }));
                         }}
                         className={`py-1.5 px-2 text-[10px] font-extrabold rounded-lg transition-all border text-center cursor-pointer ${
@@ -1406,7 +1438,7 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
                         type="button"
                         onClick={() => {
                           setWhatsappGateway('api');
-                          localStorage.setItem('ai_billing_whatsapp_type_v1', 'api');
+                          SecureStorage.setItem('ai_billing_whatsapp_type_v1', 'api');
                           window.dispatchEvent(new CustomEvent('add-session-log', { detail: '💻 Changed WhatsApp gateway to Computer Web API (api.whatsapp)' }));
                         }}
                         className={`py-1.5 px-2 text-[10px] font-extrabold rounded-lg transition-all border text-center cursor-pointer ${
@@ -1508,6 +1540,23 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
               {/* Action and Download Bar footprint */}
               <div className="mt-5 border-t border-slate-850 pt-4 flex flex-wrap gap-2 justify-between items-center text-xs">
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      if (sharingInvoice) {
+                        window.dispatchEvent(
+                          new CustomEvent('trigger-thermal-print', { detail: sharingInvoice })
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent('add-session-log', {
+                            detail: `🖨️ [Thermal POS Printer] Dispatched high-performance print job for Invoice #${sharingInvoice.invoiceNumber}`
+                          })
+                        );
+                      }
+                    }}
+                    className="text-[10px] font-black text-amber-400 hover:text-amber-300 bg-amber-950/50 hover:bg-amber-900 border border-amber-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer animate-pulse"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-amber-400" /> Thermal print (80mm)
+                  </button>
                   <button
                     onClick={() => exportInvoicePDF(sharingInvoice, shopSetup)}
                     className="text-[10px] font-bold text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"

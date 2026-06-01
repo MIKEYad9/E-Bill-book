@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Invoice, ShopSetup, ShareLog } from '../types';
 import { formatCurrency } from '../utils';
 import { exportInvoicePDF, exportBulkInvoicesPDF } from '../pdfGenerator';
-import { DB } from '../db';
+import { DB, SecureStorage } from '../db';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   TrendingUp,
@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Share2,
   Printer,
+  FileDown,
   Sparkles,
   User,
   Clock,
@@ -73,7 +74,7 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
   const searchQueryRef = React.useRef(searchQuery);
 
   useEffect(() => {
-    const saved = localStorage.getItem('ai_billing_recent_searches_v1');
+    const saved = SecureStorage.getItem('ai_billing_recent_searches_v1');
     if (saved) {
       try {
         setRecentSearches(JSON.parse(saved));
@@ -108,7 +109,7 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
     setRecentSearches((prev) => {
       const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
       const updated = [trimmed, ...filtered].slice(0, 10);
-      localStorage.setItem('ai_billing_recent_searches_v1', JSON.stringify(updated));
+      SecureStorage.setItem('ai_billing_recent_searches_v1', JSON.stringify(updated));
       return updated;
     });
   };
@@ -117,7 +118,7 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
     e.stopPropagation();
     setRecentSearches((prev) => {
       const updated = prev.filter((_, idx) => idx !== indexToRemove);
-      localStorage.setItem('ai_billing_recent_searches_v1', JSON.stringify(updated));
+      SecureStorage.setItem('ai_billing_recent_searches_v1', JSON.stringify(updated));
       return updated;
     });
   };
@@ -125,7 +126,7 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
   const clearAllSearches = (e: React.MouseEvent) => {
     e.stopPropagation();
     setRecentSearches([]);
-    localStorage.removeItem('ai_billing_recent_searches_v1');
+    SecureStorage.removeItem('ai_billing_recent_searches_v1');
   };
 
   const highlightText = (text: string, query: string) => {
@@ -864,6 +865,24 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
                         </td>
                         <td className="p-3">
                           <div className="flex items-center justify-center gap-1.5">
+                            {/* Thermal POS print trigger */}
+                            <button
+                              onClick={() => {
+                                window.dispatchEvent(
+                                  new CustomEvent('trigger-thermal-print', { detail: inv })
+                                );
+                                window.dispatchEvent(
+                                  new CustomEvent('add-session-log', {
+                                    detail: `🖨️ [Dashboard Panel] Dispatched direct thermal reprint for Invoice #${inv.invoiceNumber}`
+                                  })
+                                );
+                              }}
+                              className="p-1.5 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-all"
+                              title="Thermal POS Print"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
                             <button
                               onClick={() => {
                                 // Dynamic triggers
@@ -874,7 +893,7 @@ export default function DashboardView({ invoices, shopSetup, onNavigateToPOS, on
                               className="p-1.5 text-slate-500 hover:text-slate-950 hover:bg-slate-100 rounded-lg transition-all"
                               title="Download Tax PDF Invoice"
                             >
-                              <Printer className="w-3.5 h-3.5" />
+                              <FileDown className="w-3.5 h-3.5" />
                             </button>
                             
                             <a

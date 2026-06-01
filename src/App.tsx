@@ -5,13 +5,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { Invoice, ShopSetup } from './types';
-import { DB, DEFAULT_SHOP_SETUP } from './db';
+import { DB, DEFAULT_SHOP_SETUP, SecureStorage } from './db';
 import ShopSetupView from './components/ShopSetupView';
 import DashboardView from './components/DashboardView';
 import BillGenerationView from './components/BillGenerationView';
 import SheetsAutomationView from './components/SheetsAutomationView';
 import LoginView from './components/LoginView';
 import logoImg from './assets/images/ebook_logo_1780230548111.png';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
+import ThermalReceipt from './components/ThermalReceipt';
 import {
   TrendingUp,
   ShoppingBag,
@@ -58,11 +60,31 @@ export default function App() {
   const [isDeletingProfile, setIsDeletingProfile] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
 
+  // Thermal Invoicing states
+  const [thermalInvoice, setThermalInvoice] = useState<Invoice | null>(null);
+
   // Sync active user state whenever login changes
   useEffect(() => {
-    const active = localStorage.getItem('ai_billing_active_user_v2') || 'vedantthakur918@gmail.com';
+    const active = SecureStorage.getItem('ai_billing_active_user_v2') || 'vedantthakur918@gmail.com';
     setActiveUserEmail(active);
   }, [isLoggedIn]);
+
+  // Handle thermal print event dispatcher trigger
+  useEffect(() => {
+    const handlePrintTrigger = (e: Event) => {
+      const customEvent = e as CustomEvent<Invoice>;
+      if (customEvent.detail) {
+        setThermalInvoice(customEvent.detail);
+        setTimeout(() => {
+          window.print();
+        }, 150);
+      }
+    };
+    window.addEventListener('trigger-thermal-print' as any, handlePrintTrigger);
+    return () => {
+      window.removeEventListener('trigger-thermal-print' as any, handlePrintTrigger);
+    };
+  }, []);
 
   // Reset danger zone when drawer state changes
   useEffect(() => {
@@ -73,7 +95,7 @@ export default function App() {
   }, [isProfileDrawerOpen]);
 
   const getProfileDetails = () => {
-    const usersData = localStorage.getItem('ai_billing_registered_users_v2');
+    const usersData = SecureStorage.getItem('ai_billing_registered_users_v2');
     if (usersData) {
       try {
         const list = JSON.parse(usersData);
@@ -123,16 +145,16 @@ export default function App() {
       setProfileScriptUrl(sheets.scriptUrl);
       setProfileSheetsConnected(sheets.connected);
       
-      const gw = (localStorage.getItem('ai_billing_whatsapp_type_v1') as 'deeplink' | 'api') || 'deeplink';
+      const gw = (SecureStorage.getItem('ai_billing_whatsapp_type_v1') as 'deeplink' | 'api') || 'deeplink';
       setProfileWhatsAppGateway(gw);
 
-      const cachedPrefix = localStorage.getItem('ai_billing_whatsapp_prefix_v1') || '91';
+      const cachedPrefix = SecureStorage.getItem('ai_billing_whatsapp_prefix_v1') || '91';
       setProfileWhatsAppPrefix(cachedPrefix);
 
-      const cachedMeBase = localStorage.getItem('ai_billing_whatsapp_me_base_v1') || 'https://wa.me';
+      const cachedMeBase = SecureStorage.getItem('ai_billing_whatsapp_me_base_v1') || 'https://wa.me';
       setProfileWhatsAppMeBase(cachedMeBase);
 
-      const cachedApiBase = localStorage.getItem('ai_billing_whatsapp_api_base_v1') || 'https://api.whatsapp.com/send';
+      const cachedApiBase = SecureStorage.getItem('ai_billing_whatsapp_api_base_v1') || 'https://api.whatsapp.com/send';
       setProfileWhatsAppApiBase(cachedApiBase);
 
       setProfileShopName(shopSetup.shopName);
@@ -170,10 +192,10 @@ export default function App() {
       });
 
       // 3. Save WhatsApp gateway & detailed credentials parameters
-      localStorage.setItem('ai_billing_whatsapp_type_v1', profileWhatsAppGateway);
-      localStorage.setItem('ai_billing_whatsapp_prefix_v1', profileWhatsAppPrefix.trim());
-      localStorage.setItem('ai_billing_whatsapp_me_base_v1', profileWhatsAppMeBase.trim());
-      localStorage.setItem('ai_billing_whatsapp_api_base_v1', profileWhatsAppApiBase.trim());
+      SecureStorage.setItem('ai_billing_whatsapp_type_v1', profileWhatsAppGateway);
+      SecureStorage.setItem('ai_billing_whatsapp_prefix_v1', profileWhatsAppPrefix.trim());
+      SecureStorage.setItem('ai_billing_whatsapp_me_base_v1', profileWhatsAppMeBase.trim());
+      SecureStorage.setItem('ai_billing_whatsapp_api_base_v1', profileWhatsAppApiBase.trim());
 
       // Log to sessions stream
       const customLogMsg = `⚙️ [Control Panel] Master credentials synced: Active Store: "${profileShopName}", Sheets Active Sync: ${profileSheetsConnected ? 'ENABLED' : 'DISABLED'}, WhatsApp Gateway: ${profileWhatsAppGateway === 'api' ? 'Web API' : 'App Deep Link'} (Prefix: +${profileWhatsAppPrefix}, waBase: "${profileWhatsAppMeBase}", apiBase: "${profileWhatsAppApiBase}")`;
@@ -198,7 +220,7 @@ export default function App() {
   const handleDeleteActiveProfile = () => {
     try {
       // 1. Retrieve current registry list of profiles
-      const usersData = localStorage.getItem('ai_billing_registered_users_v2');
+      const usersData = SecureStorage.getItem('ai_billing_registered_users_v2');
       let currentUsers = [];
       if (usersData) {
         try {
@@ -212,18 +234,18 @@ export default function App() {
       );
 
       // Save registry list back
-      localStorage.setItem('ai_billing_registered_users_v2', JSON.stringify(updatedUsers));
+      SecureStorage.setItem('ai_billing_registered_users_v2', JSON.stringify(updatedUsers));
 
       // 3. Clear all active cache database entries (wipes all ledger data & integrations)
-      localStorage.removeItem('ai_billing_active_user_v2');
-      localStorage.removeItem('ai_billing_has_onboarded_v1');
-      localStorage.removeItem('ai_invoices_v1');
-      localStorage.removeItem('ai_shop_setup_v1');
-      localStorage.removeItem('ai_sheets_config_v1');
-      localStorage.removeItem('ai_billing_whatsapp_type_v1');
-      localStorage.removeItem('ai_billing_whatsapp_prefix_v1');
-      localStorage.removeItem('ai_billing_whatsapp_me_base_v1');
-      localStorage.removeItem('ai_billing_whatsapp_api_base_v1');
+      SecureStorage.removeItem('ai_billing_active_user_v2');
+      SecureStorage.removeItem('ai_billing_has_onboarded_v1');
+      SecureStorage.removeItem('ai_invoices_v1');
+      SecureStorage.removeItem('ai_shop_setup_v1');
+      SecureStorage.removeItem('ai_sheets_config_v1');
+      SecureStorage.removeItem('ai_billing_whatsapp_type_v1');
+      SecureStorage.removeItem('ai_billing_whatsapp_prefix_v1');
+      SecureStorage.removeItem('ai_billing_whatsapp_me_base_v1');
+      SecureStorage.removeItem('ai_billing_whatsapp_api_base_v1');
 
       // 4. Force Reset view triggers safely
       setIsProfileDrawerOpen(false);
@@ -275,7 +297,7 @@ export default function App() {
   // 2. Fetch records initially
   useEffect(() => {
     // Check if onboarded previously
-    const onboardFlag = localStorage.getItem('ai_billing_has_onboarded_v1');
+    const onboardFlag = SecureStorage.getItem('ai_billing_has_onboarded_v1');
     if (onboardFlag === 'true') {
       setHasOnboarded(true);
     }
@@ -301,7 +323,7 @@ export default function App() {
   const handleOnboardingSubmit = (setup: ShopSetup) => {
     DB.saveShopSetup(setup);
     setShopSetup(setup);
-    localStorage.setItem('ai_billing_has_onboarded_v1', 'true');
+    SecureStorage.setItem('ai_billing_has_onboarded_v1', 'true');
     setHasOnboarded(true);
     setActiveTab('dashboard');
   };
@@ -536,6 +558,7 @@ export default function App() {
               onBillGenerated={() => {
                 handleRefreshData();
                 setActiveTab('dashboard'); // go to overview on success
+                window.dispatchEvent(new CustomEvent('bill-generated'));
               }}
             />
           )}
@@ -1027,7 +1050,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     if (confirm('Are you sure you want to sign out and clear your onboarding boutique sessions?')) {
-                      localStorage.clear();
+                      SecureStorage.clear();
                       window.location.reload();
                     }
                   }}
@@ -1042,6 +1065,12 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Progressive Web App Install/Add-to-HomeScreen Prompts Manager */}
+      <PWAInstallPrompt isLoggedIn={isLoggedIn} />
+
+      {/* Monochromatic POS High-Performance Thermal Receipt printable overlay wrapper */}
+      <ThermalReceipt invoice={thermalInvoice} shopSetup={shopSetup} />
 
     </div>
   );

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import logoImg from '../assets/images/ebook_logo_1780230548111.png';
 import { GoogleSheetsConfig } from '../types';
-import { DB } from '../db';
+import { DB, SecureStorage } from '../db';
 
 interface LoginViewProps {
   onLoginSuccess: (sheetsConfig: GoogleSheetsConfig) => void;
@@ -45,6 +45,7 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
   const [signupShopAddress, setSignupShopAddress] = useState('Sector-5, Near Hanuman Mandir, Main Market, Jaipur, Rajasthan - 302001');
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -57,17 +58,17 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
 
   // WhatsApp setup wizard states
   const [waGateway, setWaGateway] = useState<'deeplink' | 'api'>(
-    (localStorage.getItem('ai_billing_whatsapp_type_v1') as 'deeplink' | 'api') || 'deeplink'
+    (SecureStorage.getItem('ai_billing_whatsapp_type_v1') as 'deeplink' | 'api') || 'deeplink'
   );
   const [waPrefix, setWaPrefix] = useState(
-    localStorage.getItem('ai_billing_whatsapp_prefix_v1') || '91'
+    SecureStorage.getItem('ai_billing_whatsapp_prefix_v1') || '91'
   );
 
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Initialize or check registered users
   const getRegisteredUsers = () => {
-    const usersData = localStorage.getItem('ai_billing_registered_users_v2');
+    const usersData = SecureStorage.getItem('ai_billing_registered_users_v2');
     if (!usersData) {
       const defaultUser = {
         email: 'vedantthakur918@gmail.com',
@@ -75,7 +76,7 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
         shopName: 'Balaji Fashion Saree Kendra',
         shopAddress: 'Sector-5, Near Hanuman Mandir, Main Market, Jaipur, Rajasthan - 302001'
       };
-      localStorage.setItem('ai_billing_registered_users_v2', JSON.stringify([defaultUser]));
+      SecureStorage.setItem('ai_billing_registered_users_v2', JSON.stringify([defaultUser]));
       return [defaultUser];
     }
     try {
@@ -153,7 +154,7 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
         };
 
         const updatedUsers = [...usersList, newUser];
-        localStorage.setItem('ai_billing_registered_users_v2', JSON.stringify(updatedUsers));
+        SecureStorage.setItem('ai_billing_registered_users_v2', JSON.stringify(updatedUsers));
 
         // Save shop setup directly for direct workspace setup preview
         const currentShopSetup = DB.getShopSetup();
@@ -186,13 +187,13 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
     DB.saveSheetsConfig(config);
 
     // Save active user email
-    localStorage.setItem('ai_billing_active_user_v2', email.trim().toLowerCase());
+    SecureStorage.setItem('ai_billing_active_user_v2', email.trim().toLowerCase());
 
     // Persist WhatsApp protocols in sync with App configurations
-    localStorage.setItem('ai_billing_whatsapp_type_v1', waGateway);
-    localStorage.setItem('ai_billing_whatsapp_prefix_v1', waPrefix.trim());
-    localStorage.setItem('ai_billing_whatsapp_me_base_v1', 'https://wa.me');
-    localStorage.setItem('ai_billing_whatsapp_api_base_v1', 'https://api.whatsapp.com/send');
+    SecureStorage.setItem('ai_billing_whatsapp_type_v1', waGateway);
+    SecureStorage.setItem('ai_billing_whatsapp_prefix_v1', waPrefix.trim());
+    SecureStorage.setItem('ai_billing_whatsapp_me_base_v1', 'https://wa.me');
+    SecureStorage.setItem('ai_billing_whatsapp_api_base_v1', 'https://api.whatsapp.com/send');
 
     setTimeout(() => {
       onLoginSuccess(config);
@@ -207,13 +208,13 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
     };
 
     // Save active user email
-    localStorage.setItem('ai_billing_active_user_v2', email.trim().toLowerCase());
+    SecureStorage.setItem('ai_billing_active_user_v2', email.trim().toLowerCase());
 
     // Always make sure WhatsApp setups are written
-    localStorage.setItem('ai_billing_whatsapp_type_v1', waGateway);
-    localStorage.setItem('ai_billing_whatsapp_prefix_v1', waPrefix.trim());
-    localStorage.setItem('ai_billing_whatsapp_me_base_v1', 'https://wa.me');
-    localStorage.setItem('ai_billing_whatsapp_api_base_v1', 'https://api.whatsapp.com/send');
+    SecureStorage.setItem('ai_billing_whatsapp_type_v1', waGateway);
+    SecureStorage.setItem('ai_billing_whatsapp_prefix_v1', waPrefix.trim());
+    SecureStorage.setItem('ai_billing_whatsapp_me_base_v1', 'https://wa.me');
+    SecureStorage.setItem('ai_billing_whatsapp_api_base_v1', 'https://api.whatsapp.com/send');
 
     onLoginSuccess(config);
   };
@@ -397,13 +398,21 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 text-slate-600 w-4 h-4" />
                     <input
-                      type={showPassword ? 'text' : 'password'}
+                      type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                       placeholder="••••••••"
-                      className="w-full pl-9 pr-3 py-2.5 text-sm border-2 border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 bg-white font-mono font-bold text-slate-900"
+                      className="w-full pl-9 pr-10 py-2.5 text-sm border-2 border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 bg-white font-mono font-bold text-slate-900"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-3 text-slate-600 hover:text-slate-900 transition-colors"
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
               )}

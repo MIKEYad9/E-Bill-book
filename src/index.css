@@ -55,3 +55,93 @@ body {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Professional Thermal POS Printing Media Styles */
+@media print {
+  /* Reset background and text color to black/white for high-contrast thermal scanning */
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "Courier New", Courier, monospace !important;
+    width: 80mm !important; /* Forces layout calculations within 80mm roll standard */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Completely hide AI Studio environment workspace chrome, panels, modals and React Root app */
+  #root,
+  header,
+  footer,
+  aside,
+  nav,
+  button,
+  .no-print,
+  .fixed:not(#thermal-print-section-wrapper),
+  .modal {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Display only the dedicated thermal section wrapper during system print dialog */
+  #thermal-print-section-wrapper {
+    display: block !important;
+    visibility: visible !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 76mm !important; /* Compensates beautifully for 2mm grip on either side */
+    margin: 0 !important;
+    padding: 4mm 2mm 8mm 2mm !important;
+    background: #ffffff !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Page sizing controls targeting 80mm thermal rolls and automatic lengths */
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  /* Enforce monochromatic typography renders */
+  .thermal-receipt-text {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace !important;
+    color: #000000 !important;
+  }
+}
+
+/* Hide the thermal print section entirely from any UI display layouts on desktop/mobile screens */
+@media screen {
+  #thermal-print-section-wrapper {
+    display: none !important;
+  }
+}
+
+/* Custom POS high-performance interactive tap styles */
+input[type="number"].pos-compact-number::-webkit-inner-spin-button,
+input[type="number"].pos-compact-number::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+input[type="number"].pos-compact-number {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+/* Touch-expanded visual wrapper for POS form rows */
+.pos-touch-input-container {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pos-touch-input-container:focus-within {
+  border-color: #6366f1 !important; /* Indigo primary */
+  box-shadow: 0 0 0 2.5px rgba(99, 102, 241, 0.25) !important;
+  transform: scale(1.02);
+}
+
