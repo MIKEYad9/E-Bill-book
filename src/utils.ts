@@ -4,6 +4,7 @@
  */
 
 import { Invoice, InvoiceItem, ShopSetup } from './types';
+import * as XLSX from 'xlsx';
 
 /**
  * Format currency to Indian Rupees system or specified currency
@@ -296,6 +297,53 @@ export function generateGSTReportCSV(invoices: Invoice[]): string {
   });
 
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+}
+
+/**
+ * Generate and download highly structured Excel (.xlsx) spreadsheet
+ * of the Monthly GST report using the 'xlsx' library
+ */
+export function exportGSTReportXLSX(invoices: Invoice[], shopSetup?: ShopSetup): void {
+  const data = invoices.map((inv) => ({
+    'Invoice Number': inv.invoiceNumber,
+    'Date': new Date(inv.date).toLocaleDateString('en-IN'),
+    'Customer Name': inv.customerName || 'Walk-in Customer',
+    'Customer Phone': inv.customerPhone || '',
+    'Sub Total': inv.subtotal,
+    'Discount Deducted': inv.totalDiscount,
+    'GST Mode': inv.gstEnabled ? 'ON' : 'OFF',
+    'CGST (9%)': inv.totalCgstAmount,
+    'SGST (9%)': inv.totalSgstAmount,
+    'Total GST Collected': inv.totalGstAmount,
+    'Grand Total Paid': inv.grandTotal,
+    'Payment Mode': inv.paymentMethod,
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'GST Report');
+
+  // Define column widths for better readability so headers aren't cut off
+  const columnWidths = [
+    { wch: 18 }, // Invoice Number
+    { wch: 12 }, // Date
+    { wch: 22 }, // Customer Name
+    { wch: 15 }, // Customer Phone
+    { wch: 12 }, // Sub Total
+    { wch: 18 }, // Discount Deducted
+    { wch: 10 }, // GST Mode
+    { wch: 12 }, // CGST (9%)
+    { wch: 12 }, // SGST (9%)
+    { wch: 18 }, // Total GST Collected
+    { wch: 18 }, // Grand Total Paid
+    { wch: 15 }, // Payment Mode
+  ];
+  worksheet['!cols'] = columnWidths;
+
+  const shopNameSlug = shopSetup?.shopName ? shopSetup.shopName.replace(/[^a-zA-Z0-9]/g, '_') : 'E_Bill_Book';
+  const fileName = `GSTR1_SALES_REPORT_${shopNameSlug}_${new Date().getFullYear()}.xlsx`;
+
+  XLSX.writeFile(workbook, fileName);
 }
 
 /**

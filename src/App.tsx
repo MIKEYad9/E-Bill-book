@@ -586,9 +586,9 @@ export default function App() {
       {/* SECTION 4: GLOBAL SITE FOOTER */}
       <footer className="bg-white border-t border-slate-100 py-4 text-center text-[10px] text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-          <p>© 2026 AI Retail Billing System. Crafted for Indian Fashion Boutique Stores.</p>
+          <p>© 2026 AI Retail Billing System. Crafted for Revolution FOR Stores.</p>
           <p className="flex items-center gap-1">
-            Made with <Heart className="w-3 h-3 text-red-500 fill-red-500" /> for Jaipur & Handloom weavers.
+            Made with love from <span className="font-bold text-slate-500">VAD 2027:109</span> 🖤 For "{shopSetup.shopName}"
           </p>
         </div>
       </footer>

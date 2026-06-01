@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Invoice, GoogleSheetsConfig, ShopSetup } from '../types';
-import { generateGSTReportCSV } from '../utils';
+import { generateGSTReportCSV, exportGSTReportXLSX } from '../utils';
 import { DB } from '../db';
 import {
   FileSpreadsheet,
@@ -277,6 +277,18 @@ function doPost(e) {
     link.click();
   };
 
+  const handleDownloadOfflineXLSX = () => {
+    try {
+      exportGSTReportXLSX(invoices, shopSetup);
+      setSyncLogs((prev) => [
+        `[${new Date().toLocaleTimeString()}] Generated and exported offline GST Excel Report (.xlsx) successfully.`,
+        ...prev
+      ]);
+    } catch (err: any) {
+      setSyncLogs((prev) => [`[Error] Failed to generate Excel report: ${err.message}`, ...prev]);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
@@ -495,13 +507,24 @@ function doPost(e) {
               </div>
             </div>
 
-            <button
-              onClick={handleDownloadOfflineCSV}
-              className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-[10px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-650" />
-              Offline GSTR-1 CSV Ledger Export
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadOfflineCSV}
+                className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-250 text-[10px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-600" />
+                Offline GSTR-1 CSV Ledger
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadOfflineXLSX}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95 hover:scale-[1.01]"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                Offline GSTR-1 Excel (.xlsx)
+              </button>
+            </div>
 
           </div>
 

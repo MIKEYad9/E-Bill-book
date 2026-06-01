@@ -38,8 +38,38 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
   // Input states
-  const [email, setEmail] = useState(userEmail || 'vedantthakur918@gmail.com');
-  const [password, setPassword] = useState('admin123'); // Default simple password for boutique setup
+  const [email, setEmail] = useState(() => {
+    const lastEmail = SecureStorage.getItem('ai_billing_last_signup_email');
+    if (lastEmail) return lastEmail;
+    
+    // Check if we have registered users list
+    const usersData = SecureStorage.getItem('ai_billing_registered_users_v2');
+    if (usersData) {
+      try {
+        const list = JSON.parse(usersData);
+        if (list && list.length > 0) {
+          return list[list.length - 1].email;
+        }
+      } catch (e) {}
+    }
+    return userEmail || 'vedantthakur918@gmail.com';
+  });
+
+  const [password, setPassword] = useState(() => {
+    const lastPass = SecureStorage.getItem('ai_billing_last_signup_password');
+    if (lastPass) return lastPass;
+
+    const usersData = SecureStorage.getItem('ai_billing_registered_users_v2');
+    if (usersData) {
+      try {
+        const list = JSON.parse(usersData);
+        if (list && list.length > 0) {
+          return list[list.length - 1].password;
+        }
+      } catch (e) {}
+    }
+    return 'admin123';
+  });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [signupShopName, setSignupShopName] = useState('Balaji Fashion Saree Kendra');
   const [signupShopAddress, setSignupShopAddress] = useState('Sector-5, Near Hanuman Mandir, Main Market, Jaipur, Rajasthan - 302001');
@@ -84,6 +114,31 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
     } catch {
       return [];
     }
+  };
+
+  const getRecentSignUp = () => {
+    const list = getRegisteredUsers();
+    // Return latest registered user if any
+    if (list && list.length > 0) {
+      const nonDefault = list.filter((u: any) => u.email !== 'vedantthakur918@gmail.com');
+      if (nonDefault.length > 0) {
+        return nonDefault[nonDefault.length - 1];
+      }
+      return list[0];
+    }
+    return null;
+  };
+
+  const maskEmail = (emailStr: string) => {
+    if (!emailStr) return '';
+    const parts = emailStr.split('@');
+    if (parts.length !== 2) return emailStr;
+    const name = parts[0];
+    const domain = parts[1];
+    if (name.length <= 2) {
+      return `**@${domain}`;
+    }
+    return `${name.substring(0, 2)}***@${domain}`;
   };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -155,6 +210,10 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
 
         const updatedUsers = [...usersList, newUser];
         SecureStorage.setItem('ai_billing_registered_users_v2', JSON.stringify(updatedUsers));
+
+        // Auto-fill states and persist for effortless auto-login
+        SecureStorage.setItem('ai_billing_last_signup_email', emailLower);
+        SecureStorage.setItem('ai_billing_last_signup_password', password);
 
         // Save shop setup directly for direct workspace setup preview
         const currentShopSetup = DB.getShopSetup();
@@ -234,12 +293,15 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
             className="w-28 h-28 object-cover rounded-2xl shadow-2xl mx-auto border-2 border-amber-500/20 ring-4 ring-black/40 hover:scale-105 transition-transform duration-300"
             referrerPolicy="no-referrer"
           />
-          <div className="space-y-1">
+          <div className="space-y-1.5 text-center">
             <h1 className="text-2xl font-black text-white tracking-tight font-sans">
-              Jaipur Handloom POS Secure Gate
+              E-Bill-Book
             </h1>
             <p className="text-xs text-slate-200 font-semibold font-sans tracking-wide">
               Continuous Ledger Billing & Cloud Sheets Integration
+            </p>
+            <p className="text-xs sm:text-sm font-black text-amber-400 font-sans tracking-wider pt-0.5">
+              ( VAD 2027:109 )
             </p>
           </div>
         </div>
@@ -419,9 +481,31 @@ export default function LoginView({ onLoginSuccess, userEmail }: LoginViewProps)
 
               {/* Default Credentials Hint for Quick Onboarding */}
               {authMode === 'signin' && (
-                <p className="text-[10px] text-slate-700 font-semibold select-none leading-normal">
-                  💡 Hint: Default admin account email is <span className="font-bold text-slate-900">vedantthakur918@gmail.com</span> and password is <span className="font-extrabold text-slate-900 font-mono bg-slate-100 border border-slate-200 px-1 rounded-sm">admin123</span>
-                </p>
+                <div className="bg-slate-50/80 border border-slate-200/60 rounded-xl p-3 text-[10.5px] space-y-1.5 text-slate-600 leading-normal select-none">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-700 uppercase tracking-widest text-[9.5px]">
+                    <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                    How to access?
+                  </div>
+                  <p>
+                    Enter your registered credentials (e.g. <span className="font-bold text-slate-800">example@gmail.com</span> / <span className="font-mono bg-slate-100 border border-slate-200/60 px-1 rounded text-slate-900 font-bold text-[9px]">••••••••</span>).
+                  </p>
+                  {(() => {
+                    const lastUser = getRecentSignUp();
+                    if (lastUser) {
+                      const isDefault = lastUser.email === 'vedantthakur918@gmail.com';
+                      return (
+                        <p className="pt-1.5 mt-1.5 border-t border-slate-200/50 text-[10px] text-indigo-650 font-bold flex items-center gap-1 flex-wrap">
+                          <Sparkles className="w-3 h-3 text-amber-500 animate-pulse shrink-0" />
+                          <span>Credentials auto-loaded:</span>
+                          <span className="font-mono bg-indigo-50 text-indigo-900 px-1.5 py-0.5 rounded border border-indigo-200/60 text-[9px] font-black">
+                            {isDefault ? 'Using demo terminal credentials' : `Profile: ${maskEmail(lastUser.email)}`}
+                          </span>
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
               )}
 
               {/* Submit Trigger */}
