@@ -1,3 +1,21 @@
+<div align="center">
+
+<img src="./assets/logo.png" alt="E-Bill Book Logo" width="400"/>
+
+<h1>🧾 E-Bill Book</h1>
+
+<p><strong>Smart Billing for Modern Retail Stores 🇮🇳</strong></p>
+
+<p>
+🚀 Generate Bills • 📄 Export PDFs • 💬 Share via WhatsApp
+</p>
+
+<p>
+Built for clothing stores, boutiques, fashion outlets, and retail businesses.
+</p>
+
+</div>
+
 <div align="center">🧾✨ E-Bill Book
 
 Smart Billing for Modern Retail Stores 🇮🇳
