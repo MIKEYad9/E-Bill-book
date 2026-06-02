@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Invoice, InvoiceItem, ShopSetup } from '../types';
-import { calculateInvoiceTotals, buildWhatsAppLink, buildTextReceipt } from '../utils';
+import { calculateInvoiceTotals, buildWhatsAppLink, buildTextReceipt, compileSheetsSyncPayload } from '../utils';
 import { exportInvoicePDF } from '../pdfGenerator';
 import { DB, SAMPLE_CATALOG, CatalogItem, SecureStorage } from '../db';
 import {
@@ -109,6 +109,37 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
   const [whatsappGateway, setWhatsappGateway] = useState<'deeplink' | 'api'>(() => {
     return (SecureStorage.getItem('ai_billing_whatsapp_type_v1') as 'deeplink' | 'api') || 'deeplink';
   });
+
+  // Viewport detect for text editor responsiveness
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1200));
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Auto grow textarea height to fit content
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    // Reset height to let scrollHeight update accurately
+    textarea.style.height = 'auto';
+    
+    // Calculate required height
+    const scrollHeight = textarea.scrollHeight;
+    
+    // Set heights based on viewport & content
+    const isMobile = viewportWidth < 768;
+    const minHeight = isMobile ? 220 : 300;
+    
+    textarea.style.height = `${Math.max(minHeight, scrollHeight)}px`;
+  }, [editedShareText, viewportWidth]);
 
   // 8. Row Delete Two-Step Confirmation State
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -407,13 +438,16 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
       window.dispatchEvent(new CustomEvent('add-session-log', {
         detail: `🔄 [Sync In-Progress] Transferring transaction log for Invoice #${compiledInvoice.invoiceNumber} to Google Sheet...`
       }));
+      const activeUserEmail = SecureStorage.getItem('ai_billing_active_user_v2') || '';
+      const payload = compileSheetsSyncPayload(compiledInvoice, shopSetup, activeUserEmail);
+
       fetch(sheetsConfig.scriptUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(compiledInvoice)
+        body: JSON.stringify(payload)
       })
       .then(() => {
         // Mark as synced to sheets
@@ -1267,11 +1301,11 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
 
       {/* 8. REFINED SHARE PREVIEW & DEEP-LINKING HUB (MODAL OVERLAY) */}
       {sharingInvoice && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden text-slate-100 flex flex-col md:flex-row max-h-[92vh] md:max-h-[85vh] animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden text-slate-100 flex flex-col md:flex-row h-[90vh] md:h-[85vh] max-h-[92vh] md:max-h-[85vh] animate-in zoom-in-95 duration-200">
             
             {/* LEFT SIDE: Management Control Desk & Editor Workspace */}
-            <div className="flex-1 p-5 sm:p-6 md:p-8 flex flex-col justify-between overflow-y-auto border-b md:border-b-0 md:border-r border-slate-850">
+            <div className="flex-1 p-5 sm:p-6 md:p-8 flex flex-col justify-between overflow-y-auto border-b-0 md:border-r border-slate-850">
               <div className="space-y-4">
                 {/* Header */}
                 <div className="flex items-start justify-between">
@@ -1374,35 +1408,57 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
                 </div>
 
                 {/* Interactive Message Content Editor */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[10px] font-bold text-slate-300 uppercase tracking-wider">
-                    <span>✨ Interactive Text Editor:</span>
+                <div className="bg-slate-950/40 p-4 sm:p-5 rounded-2xl border border-slate-800/80 backdrop-blur-sm space-y-4 w-full max-w-full min-w-0 transition-all duration-300">
+                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-xs font-black tracking-wider text-slate-200 uppercase font-sans flex items-center gap-1.5 shrink-0">
+                      <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                      Interactive Text Editor
+                    </span>
                     <button
                       type="button"
-                      onClick={() => handleCopyToClipboard(currentPreviewText)}
-                      className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/25 hover:border-emerald-500/50 active:scale-95 transition-all cursor-pointer"
+                      onClick={() => handleCopyToClipboard(editedShareText)}
+                      className={`font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none active:scale-95 border shrink-0 ${
+                        viewportWidth < 768 
+                          ? 'w-full py-3 px-4 min-h-[44px] text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-550 shadow-md' 
+                          : 'w-auto px-3 py-1.5 text-[10px] text-emerald-400 hover:text-emerald-300 bg-slate-950/80 border-emerald-500/25 hover:border-emerald-500/50'
+                      }`}
                       id="quick-copy-text"
                     >
                       {shareCopied ? (
                         <>
-                          <Check className="w-3 h-3 text-emerald-400" />
-                          <span>Copied!</span>
+                          <Check className="w-3.5 h-3.5 text-emerald-200" />
+                          <span>Copied to Clipboard!</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="w-3 h-3" />
+                          <Copy className="w-3.5 h-3.5" />
                           <span>Copy to Clipboard</span>
                         </>
                       )}
                     </button>
                   </div>
-                  <textarea
-                    rows={6}
-                    value={editedShareText}
-                    onChange={(e) => setEditedShareText(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-xl p-3 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 whitespace-pre-wrap leading-relaxed resize-none scrollbar-thin overflow-y-auto"
-                    placeholder="Formatting beautiful lines..."
-                  />
+                  
+                  <div className="relative w-full max-w-full min-w-0">
+                    <textarea
+                      ref={textareaRef}
+                      value={editedShareText}
+                      onChange={(e) => setEditedShareText(e.target.value)}
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
+                        maxHeight: viewportWidth < 768 ? '360px' : '450px',
+                      }}
+                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-xl p-3 sm:p-4 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition-all text-slate-100 placeholder-slate-500 leading-relaxed resize-none scrollbar-thin overflow-y-auto ${
+                        viewportWidth < 768 
+                          ? 'text-[14px]' 
+                          : viewportWidth >= 768 && viewportWidth < 1024 
+                            ? 'text-sm' 
+                            : 'text-xs font-mono'
+                      }`}
+                      placeholder="Formatting beautiful lines..."
+                    />
+                  </div>
                 </div>
 
                 {/* Copy & Deep Linking Operations Hub */}
@@ -1600,8 +1656,8 @@ export default function BillGenerationView({ shopSetup, initialCustomer, onBillG
               </div>
             </div>
 
-            {/* RIGHT SIDE: Smartphone Realistic UI Live Simulator preview */}
-            <div className="w-full md:w-[360px] bg-slate-950 p-4 sm:p-6 flex flex-col items-center justify-center border-t md:border-t-0 border-slate-850">
+            {/* RIGHT SIDE: Smartphone Realistic UI Live Simulator preview - Hidden on mobile screens to prioritize full height editor workspace layout */}
+            <div className="hidden md:flex md:w-[360px] bg-slate-950 p-4 sm:p-6 flex-col items-center justify-center border-t md:border-t-0 border-slate-850 shrink-0">
               <div className="w-full max-w-[280px] sm:max-w-[300px] aspect-[9/18] bg-slate-950 border-[5px] border-slate-800 rounded-[2.5rem] p-2.5 flex flex-col relative shadow-2xl overflow-hidden font-sans select-none">
                 {/* Phone Notch */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-3.5 bg-slate-800 rounded-b-xl z-20"></div>

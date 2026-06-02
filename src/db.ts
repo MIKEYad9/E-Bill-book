@@ -118,13 +118,29 @@ export const SAMPLE_CATALOG: CatalogItem[] = [
 
 // Helper Functions
 export const DB = {
+  // Helper to resolve user-specific key with sanitized trailing email representation
+  getUserKey(baseKey: string): string {
+    const active = SecureStorage.getItem('ai_billing_active_user_v2') || 'vedantthakur918@gmail.com';
+    const sanitizedEmail = active.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return `${baseKey}_${sanitizedEmail}`;
+  },
+
   // --- Shop Setup Config ---
   getShopSetup(): ShopSetup {
-    const data = SecureStorage.getItem(SETUP_KEY);
+    const userKey = this.getUserKey(SETUP_KEY);
+    let data = SecureStorage.getItem(userKey);
     if (!data) {
-      // Save default configuration initially
-      SecureStorage.setItem(SETUP_KEY, JSON.stringify(DEFAULT_SHOP_SETUP));
-      return DEFAULT_SHOP_SETUP;
+      // Fallback and recover setup from legacy key initially
+      const legacyData = SecureStorage.getItem(SETUP_KEY);
+      if (legacyData) {
+        data = legacyData;
+        // Save to user-specific space for future loads
+        SecureStorage.setItem(userKey, legacyData);
+      } else {
+        SecureStorage.setItem(userKey, JSON.stringify(DEFAULT_SHOP_SETUP));
+        SecureStorage.setItem(SETUP_KEY, JSON.stringify(DEFAULT_SHOP_SETUP));
+        return DEFAULT_SHOP_SETUP;
+      }
     }
     try {
       return JSON.parse(data);
@@ -134,13 +150,25 @@ export const DB = {
   },
 
   saveShopSetup(setup: ShopSetup): void {
+    const userKey = this.getUserKey(SETUP_KEY);
+    SecureStorage.setItem(userKey, JSON.stringify(setup));
+    // Support twin global mirror representation for safety
     SecureStorage.setItem(SETUP_KEY, JSON.stringify(setup));
   },
 
   // --- Invoices Management ---
   getInvoices(): Invoice[] {
-    const data = SecureStorage.getItem(INVOICES_KEY);
-    if (!data) return [];
+    const userKey = this.getUserKey(INVOICES_KEY);
+    let data = SecureStorage.getItem(userKey);
+    if (!data) {
+      const legacyData = SecureStorage.getItem(INVOICES_KEY);
+      if (legacyData) {
+        data = legacyData;
+        SecureStorage.setItem(userKey, legacyData);
+      } else {
+        return [];
+      }
+    }
     try {
       return JSON.parse(data);
     } catch {
@@ -159,12 +187,16 @@ export const DB = {
       invoices.unshift(invoice); // Newest bills on top
     }
     
+    const userKey = this.getUserKey(INVOICES_KEY);
+    SecureStorage.setItem(userKey, JSON.stringify(invoices));
     SecureStorage.setItem(INVOICES_KEY, JSON.stringify(invoices));
     return invoices;
   },
 
   deleteInvoice(id: string): Invoice[] {
     const invoices = this.getInvoices().filter((i) => i.id !== id);
+    const userKey = this.getUserKey(INVOICES_KEY);
+    SecureStorage.setItem(userKey, JSON.stringify(invoices));
     SecureStorage.setItem(INVOICES_KEY, JSON.stringify(invoices));
     return invoices;
   },
@@ -212,8 +244,17 @@ export const DB = {
       scriptUrl: '',
       connected: false
     };
-    const data = SecureStorage.getItem(SHEETS_KEY);
-    if (!data) return defaultSync;
+    const userKey = this.getUserKey(SHEETS_KEY);
+    let data = SecureStorage.getItem(userKey);
+    if (!data) {
+      const legacyData = SecureStorage.getItem(SHEETS_KEY);
+      if (legacyData) {
+        data = legacyData;
+        SecureStorage.setItem(userKey, legacyData);
+      } else {
+        return defaultSync;
+      }
+    }
     try {
       return JSON.parse(data);
     } catch {
@@ -222,13 +263,24 @@ export const DB = {
   },
 
   saveSheetsConfig(config: GoogleSheetsConfig): void {
+    const userKey = this.getUserKey(SHEETS_KEY);
+    SecureStorage.setItem(userKey, JSON.stringify(config));
     SecureStorage.setItem(SHEETS_KEY, JSON.stringify(config));
   },
 
   // --- Share Logs Alerts tracker ---
   getShareLogs(): ShareLog[] {
-    const data = SecureStorage.getItem(SHARE_LOGS_KEY);
-    if (!data) return [];
+    const userKey = this.getUserKey(SHARE_LOGS_KEY);
+    let data = SecureStorage.getItem(userKey);
+    if (!data) {
+      const legacyData = SecureStorage.getItem(SHARE_LOGS_KEY);
+      if (legacyData) {
+        data = legacyData;
+        SecureStorage.setItem(userKey, legacyData);
+      } else {
+        return [];
+      }
+    }
     try {
       return JSON.parse(data);
     } catch {
@@ -243,7 +295,56 @@ export const DB = {
       id: Math.random().toString(36).substring(2, 9)
     };
     logs.unshift(newLog);
-    SecureStorage.setItem(SHARE_LOGS_KEY, JSON.stringify(logs.slice(0, 100))); // Cap at 100 entries for efficiency
+    const userKey = this.getUserKey(SHARE_LOGS_KEY);
+    SecureStorage.setItem(userKey, JSON.stringify(logs.slice(0, 100))); // Cap at 100 entries for efficiency
+    SecureStorage.setItem(SHARE_LOGS_KEY, JSON.stringify(logs.slice(0, 100)));
     return logs;
+  },
+
+  // --- User-scoped WhatsApp configurations ---
+  getWhatsAppConfig() {
+    const active = SecureStorage.getItem('ai_billing_active_user_v2') || 'vedantthakur918@gmail.com';
+    const sanitizedEmail = active.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const suffix = `_${sanitizedEmail}`;
+
+    const gateway = (SecureStorage.getItem(`ai_billing_whatsapp_type_v1${suffix}`) || 
+                     SecureStorage.getItem('ai_billing_whatsapp_type_v1') || 
+                     'deeplink') as 'deeplink' | 'api';
+                     
+    const prefix = SecureStorage.getItem(`ai_billing_whatsapp_prefix_v1${suffix}`) || 
+                   SecureStorage.getItem('ai_billing_whatsapp_prefix_v1') || 
+                   '91';
+                   
+    const meBase = SecureStorage.getItem(`ai_billing_whatsapp_me_base_v1${suffix}`) || 
+                   SecureStorage.getItem('ai_billing_whatsapp_me_base_v1') || 
+                   'https://wa.me';
+                   
+    const apiBase = SecureStorage.getItem(`ai_billing_whatsapp_api_base_v1${suffix}`) || 
+                    SecureStorage.getItem('ai_billing_whatsapp_api_base_v1') || 
+                    'https://api.whatsapp.com/send';
+                    
+    return { gateway, prefix, meBase, apiBase };
+  },
+
+  saveWhatsAppConfig(config: { gateway: 'deeplink' | 'api'; prefix: string; meBase?: string; apiBase?: string }) {
+    const active = SecureStorage.getItem('ai_billing_active_user_v2') || 'vedantthakur918@gmail.com';
+    const sanitizedEmail = active.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const suffix = `_${sanitizedEmail}`;
+
+    SecureStorage.setItem(`ai_billing_whatsapp_type_v1${suffix}`, config.gateway);
+    SecureStorage.setItem(`ai_billing_whatsapp_prefix_v1${suffix}`, config.prefix.trim());
+    
+    if (config.meBase) {
+      SecureStorage.setItem(`ai_billing_whatsapp_me_base_v1${suffix}`, config.meBase.trim());
+    }
+    if (config.apiBase) {
+      SecureStorage.setItem(`ai_billing_whatsapp_api_base_v1${suffix}`, config.apiBase.trim());
+    }
+
+    // Mirror to standard keys for fallback support
+    SecureStorage.setItem('ai_billing_whatsapp_type_v1', config.gateway);
+    SecureStorage.setItem('ai_billing_whatsapp_prefix_v1', config.prefix.trim());
+    if (config.meBase) SecureStorage.setItem('ai_billing_whatsapp_me_base_v1', config.meBase.trim());
+    if (config.apiBase) SecureStorage.setItem('ai_billing_whatsapp_api_base_v1', config.apiBase.trim());
   }
 };

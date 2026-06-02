@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Invoice, GoogleSheetsConfig, ShopSetup } from '../types';
-import { generateGSTReportCSV, exportGSTReportXLSX } from '../utils';
-import { DB } from '../db';
+import { generateGSTReportCSV, exportGSTReportXLSX, compileSheetsSyncPayload } from '../utils';
+import { DB, SecureStorage } from '../db';
 import {
   FileSpreadsheet,
   CheckCircle,
@@ -45,65 +45,388 @@ export default function SheetsAutomationView({ invoices, shopSetup, onRefreshDat
 
   // Core Google Sheets macro Apps Script code
   const googleAppsScriptCode = `/**
- * Google Apps Script for AI Retail Billing System
- * Auto-creates Month-wise tabs, stores Apparel Item Sales,
- * and maintains continuous GSTR-1 summaries inside Google Sheets.
+ * Google Apps Script Webhook API for E-Bill Book Systems
+ * Synchronizes multi-table relational data cleanly across 5 structured database sheets:
+ * [USERS, BILLS, BILL ITEMS, ANALYTICS, ACTIVITY LOGS]
+ * Handles dynamic spreadsheet auto-initialization, table alignment, and automated analytics summaries.
  */
 
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    // Attempt to acquire lock for 30s to prevent concurrency collisions & double write anomalies
+    lock.waitLock(30000);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      "success": false,
+      "error": "Timeout acquiring script lock. Please try again."
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
   try {
     var rawData = e.postData.contents;
-    var invoice = JSON.parse(rawData);
+    var payload = JSON.parse(rawData);
     
     var sheet = SpreadsheetApp.getActiveSpreadsheet();
     
-    // 1. Identify or Create Month-wise Sheet (e.g. "May 2026")
-    var d = new Date(invoice.date);
-    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    var sheetName = months[d.getMonth()] + " " + d.getFullYear();
+    // Step 1: Ensure all 5 standard database sheets exist with the correct columns immediately
+    ensureDatabaseSheets(sheet);
     
-    var monthSheet = sheet.getSheetByName(sheetName);
-    if (!monthSheet) {
-      monthSheet = sheet.insertSheet(sheetName);
-      // Append tax headers
-      monthSheet.appendRow([
-        "Invoice Number", "Date & Time", "Customer Name", "Customer Phone", 
-        "Items Summary", "Subtotal", "Discount Deducted", 
-        "GST Enabled", "Taxes (GST Rs.)", "Grand Total", "Payment Mode", "Notes"
-      ]);
-      // Format headers
-      monthSheet.getRange("A1:L1").setFontWeight("bold").setBackground("#1e293b").setFontColor("#ffffff");
+    // Step 2: Extract & Process the standard payload structures
+    var parsedPayload = preprocessPayload(payload);
+    
+    // A. Sync User Data
+    if (parsedPayload.user) {
+      syncUserTable(sheet, parsedPayload.user);
     }
     
-    // 2. Format Items text summary for the cell
-    var itemsDesc = invoice.items.map(function(it) {
-      return it.name + " (" + it.size + ") x" + it.quantity;
-    }).join(", ");
+    // B. Sync Bill Data
+    if (parsedPayload.bill) {
+      syncBillTable(sheet, parsedPayload.bill);
+    }
     
-    // 3. Append Customer Row
-    monthSheet.appendRow([
-      invoice.invoiceNumber,
-      new Date(invoice.date).toLocaleString("en-IN"),
-      invoice.customerName,
-      invoice.customerPhone,
-      itemsDesc,
-      invoice.subtotal,
-      invoice.totalDiscount,
-      invoice.gstEnabled ? "YES" : "NO",
-      invoice.totalGstAmount,
-      invoice.grandTotal,
-      invoice.paymentMethod,
-      invoice.notes || ""
-    ]);
+    // C. Sync Item Level Data
+    if (parsedPayload.items && parsedPayload.items.length > 0) {
+      syncBillItemsTable(sheet, parsedPayload.items);
+    }
     
-    return ContentService.createTextOutput(JSON.stringify({ "status": "success", "message": "Logged successfully to slab " + sheetName }))
-      .setMimeType(ContentService.MimeType.JSON);
-      
+    // D. Sync Activity Logs
+    if (parsedPayload.activity) {
+      syncActivityLogsTable(sheet, parsedPayload.activity);
+    }
+    
+    // E. Perform analytics aggregation for the operation datetime
+    if (parsedPayload.bill) {
+      updateAnalyticsTable(sheet, parsedPayload.bill);
+    }
+    
+    // Return standard success structure
+    return ContentService.createTextOutput(JSON.stringify({
+      "success": true,
+      "message": "Data Saved"
+    })).setMimeType(ContentService.MimeType.JSON);
+    
   } catch(error) {
-    return ContentService.createTextOutput(JSON.stringify({ "status": "error", "message": error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      "success": false,
+      "error": "Webhook Processing Error: " + error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
-}`;
+}
+
+/**
+ * Automap legacy/basic invoice formats to the advanced 5-table standardized schema
+ */
+function preprocessPayload(payload) {
+  if (payload.action === 'syncInvoice' && payload.bill) {
+    return payload; // Already standardized payload structure
+  }
+  
+  // Fallback: If payload is just a basic Invoice object
+  var invoice = payload;
+  var email = "guest@example.com";
+  var namePart = "Guest";
+  
+  var user = {
+    userId: email,
+    fullName: namePart + " User",
+    email: email,
+    mobile: invoice.customerPhone || "9999999999",
+    businessName: "E-Bill Book Store",
+    role: "Owner",
+    createdAt: new Date().toISOString(),
+    lastLogin: new Date().toISOString(),
+    status: "Active"
+  };
+  
+  var bill = {
+    billId: invoice.id || Utilities.getUuid(),
+    billNumber: invoice.invoiceNumber || ("INV-" + Date.now()),
+    userId: email,
+    customerName: invoice.customerName || "Walk-in Customer",
+    customerMobile: invoice.customerPhone || "9999999999",
+    itemCount: invoice.items ? invoice.items.reduce(function(acc, item) { return acc + (item.quantity || 1); }, 0) : 1,
+    subtotal: invoice.subtotal || invoice.grandTotal || 0,
+    discount: invoice.totalDiscount || 0,
+    tax: invoice.totalGstAmount || 0,
+    grandTotal: invoice.grandTotal || 0,
+    paymentMode: invoice.paymentMethod || "Cash",
+    pdfUrl: "",
+    whatsappStatus: "Synced",
+    createdAt: invoice.date || new Date().toISOString()
+  };
+  
+  var items = [];
+  if (invoice.items) {
+    for (var i = 0; i < invoice.items.length; i++) {
+      var it = invoice.items[i];
+      items.push({
+        itemId: it.id || (bill.billId + "-" + i),
+        billId: bill.billId,
+        productName: it.name + (it.size ? " (" + it.size + ")" : ""),
+        quantity: it.quantity || 1,
+        unitPrice: it.rate || 0,
+        amount: it.total || ((it.rate || 0) * (it.quantity || 1))
+      });
+    }
+  }
+  
+  var activity = {
+    logId: Utilities.getUuid(),
+    userId: email,
+    action: "Bill Sync Fallback",
+    description: "Imported backup bill #" + bill.billNumber + " automatically via sync.",
+    device: "API Gateway",
+    timestamp: new Date().toISOString()
+  };
+  
+  return {
+    user: user,
+    bill: bill,
+    items: items,
+    activity: activity
+  };
+}
+
+/**
+ * Ensures standard relational sheets exist in the spreadsheet with bold headers
+ */
+function ensureDatabaseSheets(sheet) {
+  var schemas = {
+    "USERS": ["User ID", "Full Name", "Email", "Mobile", "Business Name", "Role", "Created At", "Last Login", "Status"],
+    "BILLS": ["Bill ID", "Bill Number", "User ID", "Customer Name", "Customer Mobile", "Item Count", "Subtotal", "Discount", "Tax", "Grand Total", "Payment Mode", "PDF URL", "WhatsApp Status", "Created At"],
+    "BILL ITEMS": ["Item ID", "Bill ID", "Product Name", "Quantity", "Unit Price", "Amount"],
+    "ANALYTICS": ["Date", "Total Bills", "Total Revenue", "Total Customers", "New Users", "Average Bill Value"],
+    "ACTIVITY LOGS": ["Log ID", "User ID", "Action", "Description", "Device", "Timestamp"]
+  };
+  
+  var keys = Object.keys(schemas);
+  for (var i = 0; i < keys.length; i++) {
+    var name = keys[i];
+    var headers = schemas[name];
+    var targetSheet = sheet.getSheetByName(name);
+    if (!targetSheet) {
+      targetSheet = sheet.insertSheet(name);
+      targetSheet.appendRow(headers);
+      
+      // Highlight database header rows
+      var range = targetSheet.getRange(1, 1, 1, headers.length);
+      range.setFontWeight("bold")
+           .setBackground("#0f172a") // Premium Slate 900
+           .setFontColor("#f8fafc")  // Slate 50
+           .setFontSize(10);
+      targetSheet.setFrozenRows(1);
+    }
+  }
+}
+
+/**
+ * Handle USERS sheet updates (User ID is Unique constraint)
+ */
+function syncUserTable(sheet, user) {
+  var target = sheet.getSheetByName("USERS");
+  var emailCol = 3; // Email Column is Unique key for lookup
+  var data = target.getDataRange().getValues();
+  var rowIdx = -1;
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][emailCol - 1] && data[i][emailCol - 1].toString().trim().toLowerCase() === user.email.toLowerCase()) {
+      rowIdx = i + 1;
+      break;
+    }
+  }
+  
+  var rowValues = [
+    user.userId,
+    user.fullName,
+    user.email,
+    user.mobile,
+    user.businessName,
+    user.role,
+    rowIdx === -1 ? user.createdAt : data[rowIdx - 1][6], // preserve original creation
+    user.lastLogin,
+    user.status
+  ];
+  
+  if (rowIdx > -1) {
+    // Update existing user variables preserving initial creation logs
+    target.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    // Append completely new user
+    target.appendRow(rowValues);
+  }
+}
+
+/**
+ * Sync invoice header values into the BILLS sheet
+ */
+function syncBillTable(sheet, bill) {
+  var target = sheet.getSheetByName("BILLS");
+  var billIdCol = 1; // Bill ID column
+  var data = target.getDataRange().getValues();
+  var rowIdx = -1;
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][billIdCol - 1] && data[i][billIdCol - 1].toString().trim() === bill.billId.toString().trim()) {
+      rowIdx = i + 1;
+      break;
+    }
+  }
+  
+  var rowValues = [
+    bill.billId,
+    bill.billNumber,
+    bill.userId,
+    bill.customerName,
+    bill.customerMobile,
+    bill.itemCount,
+    bill.subtotal,
+    bill.discount,
+    bill.tax,
+    bill.grandTotal,
+    bill.paymentMode,
+    bill.pdfUrl || "",
+    bill.whatsappStatus || "Synced",
+    bill.createdAt
+  ];
+  
+  if (rowIdx > -1) {
+    target.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    target.appendRow(rowValues);
+  }
+}
+
+/**
+ * Handle bill line items details in the BILL ITEMS sheet (Clears previous items for the invoice to avoid duplicates)
+ */
+function syncBillItemsTable(sheet, items) {
+  var target = sheet.getSheetByName("BILL ITEMS");
+  var data = target.getDataRange().getValues();
+  var billId = items[0].billId;
+  
+  // Scan for past line items belonging to the same Invoice ID and delete them to prevent duplicate leaks
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][1] && data[i][1].toString().trim() === billId.toString().trim()) {
+      target.deleteRow(i + 1);
+    }
+  }
+  
+  // Batch append item rows back beautifully
+  for (var k = 0; k < items.length; k++) {
+    var it = items[k];
+    target.appendRow([
+      it.itemId,
+      it.billId,
+      it.productName,
+      it.quantity,
+      it.unitPrice,
+      it.amount
+    ]);
+  }
+}
+
+/**
+ * Log activity transactions in the ACTIVITY LOGS sheet
+ */
+function syncActivityLogsTable(sheet, act) {
+  var target = sheet.getSheetByName("ACTIVITY LOGS");
+  target.appendRow([
+    act.logId,
+    act.userId,
+    act.action,
+    act.description,
+    act.device,
+    act.timestamp
+  ]);
+}
+
+/**
+ * Refresh and calculate live date-wise statistics inside the ANALYTICS sheet
+ */
+function updateAnalyticsTable(sheet, bill) {
+  var target = sheet.getSheetByName("ANALYTICS");
+  var billsSheet = sheet.getSheetByName("BILLS");
+  var usersSheet = sheet.getSheetByName("USERS");
+  
+  var billDateStr = "";
+  try {
+    billDateStr = new Date(bill.createdAt).toLocaleDateString("en-IN");
+  } catch(e) {
+    billDateStr = new Date().toLocaleDateString("en-IN");
+  }
+  
+  // Calculate aggregate metrics dynamically from the raw sheets to prevent any drift
+  var billsData = billsSheet.getDataRange().getValues();
+  var usersData = usersSheet.getDataRange().getValues();
+  
+  var totalBillsForDay = 0;
+  var totalRevenueForDay = 0;
+  var uniqueCustomers = {};
+  var newUsersCount = 0;
+  
+  for (var i = 1; i < billsData.length; i++) {
+    var createdAtStr = "";
+    try {
+      createdAtStr = new Date(billsData[i][13]).toLocaleDateString("en-IN");
+    } catch(e) {
+      continue;
+    }
+    
+    if (createdAtStr === billDateStr) {
+      totalBillsForDay += 1;
+      totalRevenueForDay += parseFloat(billsData[i][9] || "0"); // grand total is index 9
+      var custMobile = billsData[i][4]; // customer phone is index 4
+      if (custMobile) {
+        uniqueCustomers[custMobile] = true;
+      }
+    }
+  }
+  
+  // Count users registered today
+  for (var u = 1; u < usersData.length; u++) {
+    var userCreatedStr = "";
+    try {
+      userCreatedStr = new Date(usersData[u][6]).toLocaleDateString("en-IN"); // Created At index 6
+    } catch(e) {
+      continue;
+    }
+    if (userCreatedStr === billDateStr) {
+      newUsersCount += 1;
+    }
+  }
+  
+  var totalCustomersCount = Object.keys(uniqueCustomers).length;
+  var avgBillValue = totalBillsForDay > 0 ? (totalRevenueForDay / totalBillsForDay) : 0;
+  
+  // Find date row in ANALYTICS sheet
+  var analyticsData = target.getDataRange().getValues();
+  var dateRowIdx = -1;
+  for (var k = 1; k < analyticsData.length; k++) {
+    if (analyticsData[k][0] && analyticsData[k][0].toString() === billDateStr) {
+      dateRowIdx = k + 1;
+      break;
+    }
+  }
+  
+  var analyticsValues = [
+    billDateStr,
+    totalBillsForDay,
+    totalRevenueForDay,
+    totalCustomersCount,
+    newUsersCount,
+    avgBillValue
+  ];
+  
+  if (dateRowIdx > -1) {
+    target.getRange(dateRowIdx, 1, 1, analyticsValues.length).setValues([analyticsValues]);
+  } else {
+    target.appendRow(analyticsValues);
+  }
+}
+`;
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(googleAppsScriptCode);
@@ -142,11 +465,14 @@ function doPost(e) {
       ]);
 
       try {
+        const activeUserEmail = SecureStorage.getItem('ai_billing_active_user_v2') || '';
+        const payload = compileSheetsSyncPayload(target, shopSetup, activeUserEmail);
+
         await fetch(config.scriptUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(target),
+          body: JSON.stringify(payload),
         });
         
         target.syncedToSheets = true;
@@ -189,11 +515,14 @@ function doPost(e) {
       for (const inv of unsynced) {
         setSyncLogs((prev) => [`[${new Date().toLocaleTimeString()}] Posting bill code ${inv.invoiceNumber} -> Sheets API`, ...prev]);
         
+        const activeUserEmail = SecureStorage.getItem('ai_billing_active_user_v2') || '';
+        const payload = compileSheetsSyncPayload(inv, shopSetup, activeUserEmail);
+
         await fetch(config.scriptUrl, {
           method: 'POST',
           mode: 'no-cors', // standard Apps Script trigger redirect
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(inv),
+          body: JSON.stringify(payload),
         });
         
         successCount++;
@@ -243,11 +572,14 @@ function doPost(e) {
       for (const inv of sortedUnsynced) {
         setSyncLogs((prev) => [`[${new Date().toLocaleTimeString()}] Uploading missing entry ${inv.invoiceNumber} to sheet...`, ...prev]);
         
+        const activeUserEmail = SecureStorage.getItem('ai_billing_active_user_v2') || '';
+        const payload = compileSheetsSyncPayload(inv, shopSetup, activeUserEmail);
+
         await fetch(config.scriptUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(inv),
+          body: JSON.stringify(payload),
         });
         
         successCount++;

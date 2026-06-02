@@ -355,3 +355,73 @@ export function logSessionEvent(msg: string): void {
   }
 }
 
+/**
+ * Complies a unified relational 5-sheet-compliant payload representing an invoice operation
+ * for synchronizing with the advanced Google Sheets sync system.
+ */
+export function compileSheetsSyncPayload(invoice: Invoice, shop: ShopSetup, activeUserEmail: string) {
+  const userEmail = activeUserEmail || 'guest@example.com';
+  const namePart = userEmail.split('@')[0];
+  const fullName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+  const userId = userEmail.toLowerCase();
+
+  // 1. USERS layout mapping
+  const userRow = {
+    userId: userId,
+    fullName: fullName,
+    email: userEmail,
+    mobile: shop.phone || '9999999999',
+    businessName: shop.shopName || 'Balaji Fashion Saree Kendra',
+    role: 'Owner',
+    createdAt: new Date().toISOString(),
+    lastLogin: new Date().toISOString(),
+    status: 'Active'
+  };
+
+  // 2. BILLS layout mapping
+  const billRow = {
+    billId: invoice.id,
+    billNumber: invoice.invoiceNumber,
+    userId: userId,
+    customerName: invoice.customerName || 'Walk-in Customer',
+    customerMobile: invoice.customerPhone || '9999999999',
+    itemCount: invoice.items.reduce((sum, item) => sum + item.quantity, 0),
+    subtotal: invoice.subtotal,
+    discount: invoice.totalDiscount,
+    tax: invoice.totalGstAmount,
+    grandTotal: invoice.grandTotal,
+    paymentMode: invoice.paymentMethod,
+    pdfUrl: '', // Updated when cloud rendering completes
+    whatsappStatus: 'Pending',
+    createdAt: invoice.date || new Date().toISOString()
+  };
+
+  // 3. BILL ITEMS layout mapping
+  const billItems = invoice.items.map((it) => ({
+    itemId: it.id || `${invoice.id}-${Math.random().toString(36).substring(2, 5)}`,
+    billId: invoice.id,
+    productName: `${it.name}${it.size ? ' (' + it.size + ')' : ''}`,
+    quantity: it.quantity,
+    unitPrice: it.rate,
+    amount: it.total
+  }));
+
+  // 4. ACTIVITY LOGS layout mapping
+  const activityRow = {
+    logId: Math.random().toString(36).substring(2, 9),
+    userId: userId,
+    action: 'Bill Created & Synced',
+    description: `Created invoice #${invoice.invoiceNumber} for ${invoice.customerName} - Total: ₹${invoice.grandTotal}`,
+    device: 'Web POS Browser',
+    timestamp: new Date().toISOString()
+  };
+
+  return {
+    action: 'syncInvoice',
+    user: userRow,
+    bill: billRow,
+    items: billItems,
+    activity: activityRow
+  };
+}
+

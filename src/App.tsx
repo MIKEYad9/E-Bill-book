@@ -48,8 +48,12 @@ export default function App() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [shopSetup, setShopSetup] = useState<ShopSetup>(DEFAULT_SHOP_SETUP);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'sheets' | 'settings'>('dashboard');
-  const [hasOnboarded, setHasOnboarded] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [hasOnboarded, setHasOnboarded] = useState(() => {
+    return SecureStorage.getItem('ai_billing_has_onboarded_v1') === 'true';
+  });
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!SecureStorage.getItem('ai_billing_active_user_v2');
+  });
   const [posCustomerPreFill, setPosCustomerPreFill] = useState<{ name: string; phone: string; address?: string } | undefined>(undefined);
   
   // Profile Drawer States
@@ -58,7 +62,9 @@ export default function App() {
   const [sessionLogs, setSessionLogs] = useState<{ id: string; time: string; msg: string; type?: string }[]>([]);
 
   // Active profile configuration states & danger zone trackers
-  const [activeUserEmail, setActiveUserEmail] = useState('vedantthakur918@gmail.com');
+  const [activeUserEmail, setActiveUserEmail] = useState(() => {
+    return SecureStorage.getItem('ai_billing_active_user_v2') || '';
+  });
   const [isDeletingProfile, setIsDeletingProfile] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
 
@@ -74,10 +80,16 @@ export default function App() {
   // Thermal Invoicing states
   const [thermalInvoice, setThermalInvoice] = useState<Invoice | null>(null);
 
-  // Sync active user state whenever login changes
+  // Sync active user state & load user-specific records whenever login or active user changes
   useEffect(() => {
-    const active = SecureStorage.getItem('ai_billing_active_user_v2') || 'vedantthakur918@gmail.com';
+    const active = SecureStorage.getItem('ai_billing_active_user_v2') || '';
     setActiveUserEmail(active);
+    
+    // Auto-reload database records for the logged-in user
+    const fetchedSetup = DB.getShopSetup();
+    const fetchedInvoices = DB.getInvoices();
+    setShopSetup(fetchedSetup);
+    setInvoices(fetchedInvoices);
   }, [isLoggedIn]);
 
   // Handle thermal print event dispatcher trigger
@@ -113,6 +125,9 @@ export default function App() {
   }, [isProfileDrawerOpen]);
 
   const getProfileDetails = () => {
+    if (!activeUserEmail) {
+      return { name: 'Guest User', email: 'guest@example.com', initials: 'GU' };
+    }
     const usersData = SecureStorage.getItem('ai_billing_registered_users_v2');
     if (usersData) {
       try {
@@ -120,17 +135,18 @@ export default function App() {
         const match = list.find((u: any) => u.email.toLowerCase() === activeUserEmail.toLowerCase());
         if (match) {
           const namePart = match.email.split('@')[0];
-          const calculatedName = match.email.toLowerCase() === 'vedantthakur918@gmail.com' 
-            ? 'Vedant Thakur' 
-            : namePart.charAt(0).toUpperCase() + namePart.slice(1);
-          const initials = match.email.toLowerCase() === 'vedantthakur918@gmail.com'
-            ? 'VT' 
-            : namePart.substring(0, 2).toUpperCase();
+          const calculatedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+          const initials = namePart.substring(0, 2).toUpperCase();
           return { name: calculatedName, email: match.email, initials };
         }
       } catch (e) {}
     }
-    return { name: 'Vedant Thakur', email: 'vedantthakur918@gmail.com', initials: 'VT' };
+    const namePart = activeUserEmail.split('@')[0];
+    return { 
+      name: namePart.charAt(0).toUpperCase() + namePart.slice(1), 
+      email: activeUserEmail, 
+      initials: namePart.substring(0, 2).toUpperCase() 
+    };
   };
 
   const currentProfile = getProfileDetails();
@@ -270,14 +286,6 @@ export default function App() {
         try {
           usersList = JSON.parse(usersData);
         } catch (e) {}
-      } else {
-        // Fallback default user if not registry
-        usersList = [{
-          email: 'vedantthakur918@gmail.com',
-          password: 'admin123',
-          shopName: 'Balaji Fashion Saree Kendra',
-          shopAddress: 'Sector-5, Near Hanuman Mandir, Main Market, Jaipur, Rajasthan - 302001'
-        }];
       }
 
       // Find active user
@@ -382,22 +390,8 @@ export default function App() {
     }
   };
 
-  // Initialize Session Time & Feed
+  // Initialize Session Log Listener
   useEffect(() => {
-    const now = new Date();
-    const formattedTime = now.toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-    setLoginTime(formattedTime);
-
-    // Default start sequence details feed
-    const initialLogs = [
-      { id: 'log-1', time: formattedTime, msg: 'Secure TLS Administrator session authenticated for vedantthakur918@gmail.com', type: 'system' },
-      { id: 'log-2', time: formattedTime, msg: `Boutique POS engine spawned: Loaded config for ${DB.getShopSetup().shopName}`, type: 'system' },
-      { id: 'log-3', time: formattedTime, msg: 'Cloud Connectivity Gateway online: Real-time Google Sheets sync active', type: 'network' },
-      { id: 'log-4', time: formattedTime, msg: 'Integrated WhatsApp sharing engine initialized successfully', type: 'whatsapp' }
-    ];
-    setSessionLogs(initialLogs);
-
-    // Capture logs via custom event
     const handleAddLogEvent = (e: Event) => {
       const customEvent = e as CustomEvent<string>;
       const logTime = new Date().toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
@@ -414,6 +408,24 @@ export default function App() {
     window.addEventListener('add-session-log', handleAddLogEvent);
     return () => window.removeEventListener('add-session-log', handleAddLogEvent);
   }, []);
+
+  // Initialize Session Time & Feed dynamically when logged in
+  useEffect(() => {
+    if (!isLoggedIn || !activeUserEmail) return;
+
+    const now = new Date();
+    const formattedTime = now.toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    setLoginTime(formattedTime);
+
+    // Default start sequence details feed
+    const initialLogs = [
+      { id: 'log-1', time: formattedTime, msg: `Secure TLS Administrator session authenticated for ${activeUserEmail}`, type: 'system' },
+      { id: 'log-2', time: formattedTime, msg: `Boutique POS engine spawned: Loaded config for ${DB.getShopSetup().shopName}`, type: 'system' },
+      { id: 'log-3', time: formattedTime, msg: 'Cloud Connectivity Gateway online: Real-time Google Sheets sync active', type: 'network' },
+      { id: 'log-4', time: formattedTime, msg: 'Integrated WhatsApp sharing engine initialized successfully', type: 'whatsapp' }
+    ];
+    setSessionLogs(initialLogs);
+  }, [isLoggedIn, activeUserEmail]);
 
   // 2. Fetch records initially
   useEffect(() => {
@@ -459,15 +471,16 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <LoginView
-        userEmail="vedantthakur918@gmail.com"
+        userEmail=""
         onLoginSuccess={(sheetsConfig) => {
           setIsLoggedIn(true);
+          const activeUser = SecureStorage.getItem('ai_billing_active_user_v2') || '';
           const logTime = new Date().toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
           setSessionLogs((prev) => [
             {
               id: Math.random().toString(36).substring(2, 9),
               time: logTime,
-              msg: `🔑 [Secure Session] Access granted for vedantthakur918@gmail.com. Sheets Automation state: ${sheetsConfig.connected ? 'ACTIVE (READY TO POST)' : 'NOT LINKED'}`
+              msg: `🔑 [Secure Session] Access granted for ${activeUser}. Sheets Automation state: ${sheetsConfig.connected ? 'ACTIVE (READY TO POST)' : 'NOT LINKED'}`
             },
             ...prev
           ]);
@@ -1284,8 +1297,8 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm('Are you sure you want to sign out and clear your onboarding boutique sessions?')) {
-                      SecureStorage.clear();
+                    if (confirm('Are you sure you want to sign out? Your registered profile and custom credentials will be securely saved.')) {
+                      SecureStorage.removeItem('ai_billing_active_user_v2');
                       window.location.reload();
                     }
                   }}

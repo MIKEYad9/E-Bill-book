@@ -1,142 +1,20 @@
-🧾 E-Bill Book
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-<div align="center">Smart Billing for Modern Retail Stores 🇮🇳
+# Run and deploy your AI Studio app
 
-Generate Bills • Export PDFs • Share via WhatsApp
+This contains everything you need to run your app locally.
 
-Built for clothing stores, boutiques, fashion outlets, and retail businesses.
+View your app in AI Studio: https://ai.studio/apps/4aab5912-0fa7-4165-8d75-a41ac6b2d7f4
 
-</div>---
+## Run Locally
 
-🌟 Overview
+**Prerequisites:**  Node.js
 
-E-Bill Book is a modern billing application designed to simplify invoice generation for Indian retail businesses.
 
-The platform enables store owners to quickly create professional invoices, generate downloadable PDF bills, and instantly share them with customers via WhatsApp.
-
----
-
-✨ Features
-
-- 🧾 Fast bill generation
-- 📄 PDF invoice export
-- 💬 WhatsApp bill sharing
-- 📱 Mobile-friendly design
-- 🎨 Clean and intuitive UI/UX
-- ⚡ Real-time invoice preview
-- 🏪 Optimized for clothing & fashion retailers
-- 🔒 Secure customer and billing data handling
-
----
-
-🚀 Tech Stack
-
-- Frontend: React / Next.js
-- Styling: Tailwind CSS
-- Backend: Node.js
-- AI Services: Google Gemini API
-- Deployment: Vercel
-
----
-
-📸 Screenshots
-
-«Add screenshots of your application here.»
-
-Example:
-
-![Dashboard](./screenshots/dashboard.png)
-![Invoice Generator](./screenshots/invoice-generator.png)
-
----
-
-🛠️ Local Development
-
-Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- Gemini API Key
-
-Installation
-
-Clone the repository:
-
-git clone https://github.com/your-username/e-bill-book.git
-cd e-bill-book
-
-Install dependencies:
-
-npm install
-
-Create a ".env.local" file:
-
-GEMINI_API_KEY=your_api_key_here
-
-Run the development server:
-
-npm run dev
-
-Open:
-
-http://localhost:3000
-
----
-
-📂 Project Structure
-
-src/
-├── components/
-├── pages/
-├── services/
-├── utils/
-├── assets/
-└── styles/
-
----
-
-🎯 Target Users
-
-- Clothing Stores
-- Fashion Boutiques
-- Garment Retailers
-- Small & Medium Businesses
-- Independent Shop Owners
-
----
-
-🔮 Roadmap
-
-- [ ] GST invoice support
-- [ ] Customer database
-- [ ] Inventory management
-- [ ] Sales analytics dashboard
-- [ ] Multi-user access
-- [ ] Cloud backups
-- [ ] Multi-language support
-
----
-
-🤝 Contributing
-
-Contributions, suggestions, and feature requests are welcome.
-
-Fork the repository and create a pull request.
-
----
-
-📄 License
-
-This project is licensed under the MIT License.
-
----
-
-👨‍💻 Author
-
-Vedant Thakur
-
-For feedback, suggestions, or collaboration:
-
-📧 vedantthakur918@gmail.com
-
-⭐ If you find this project useful, consider giving it a star.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
